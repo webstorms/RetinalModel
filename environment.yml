@@ -1,0 +1,15 @@
+name: retina
+dependencies:
+  - python=3.8
+  - pytorch::pytorch
+  - pytorch::torchvision
+  - nvidia::pytorch-cuda=11.8
+  - matplotlib
+  - seaborn
+  - pandas
+  - pip:
+      - h5py
+      - jupyter
+      - scikit-learn
+      - brainbox
+      - --editable .

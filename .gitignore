@@ -1,0 +1,19 @@
+# OSX
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+src.egg-info
+
+# PyCharm
+.idea
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Code
+scripts/
+todo
+data/
+notebooks/
