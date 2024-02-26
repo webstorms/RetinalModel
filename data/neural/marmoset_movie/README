@@ -1,0 +1,4 @@
+Data from Karamanlis et al., 2023
+
+1. Download data from: https://doi.gin.g-node.org/10.12751/g-node.ejk8kx/
+2. Export mat files using scripts/export_mats.m (make sure to change the paths in the script).

@@ -1,0 +1,5 @@
+Data from Freedland J. and Rieke F, 2022
+
+1. Download data from: https://datadryad.org/stash/share/cX_5w1l_NAtMlP-tjO8CKRwZZQIgjS0K9GcXbvGBca4 to the macaque_image folder.
+2. Preprocess mat files using scripts/build_image_mats.m (make sure to change the export path in the script and to run it for both the on and off parasol cells).
+3. Build PyTorch tensor using scripts/build_tensors.py (make sure to pass root argument of project).

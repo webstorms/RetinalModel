@@ -11,9 +11,3 @@ src.egg-info
 
 # Jupyter Notebook
 .ipynb_checkpoints
-
-# Code
-scripts/
-todo
-data/
-notebooks/
