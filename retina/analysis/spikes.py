@@ -86,6 +86,16 @@ class ModelDatasetSpikeStats:
         self.pred_model_spikes = pred_model_spikes.permute(0, 3, 1, 2, 4, 5).flatten(3, 5)
         self.exp_stats = SpikeStats(self.pred_model_spikes, min_cv_spikes)
 
+    @property
+    def n_unresponsive_units(self):
+        activity = self.pred_model_spikes.mean((0, 1, 2))
+        return activity[activity == 0].shape[0]
+
+    @property
+    def active_unit_idxs(self):
+        activity = self.pred_model_spikes.mean((0, 1, 2))
+        return torch.arange(400)[activity > 0]
+
 
 class DatasetSpikeStats:
 
@@ -98,6 +108,7 @@ class DatasetSpikeStats:
         if get_model_responses:
             prediction_model = train.Trainer.load_model(f"{root}/results", f"0.0031622776601683794_*_0.01_0.6_{pred_offset}_8")
             pred_model_spikes = DatasetSpikeStats.get_raster(prediction_model, self.x, repeats)
+            self.unperm_pred_model_spikes = pred_model_spikes
             self.pred_model_spikes = pred_model_spikes.permute(0, 3, 1, 2, 4, 5).flatten(3, 5)
             offset = self.spike_tensor.shape[1] - self.pred_model_spikes.shape[1]
             self.spike_tensor = self.spike_tensor[:, offset:]
@@ -106,10 +117,18 @@ class DatasetSpikeStats:
     def get_exp_spike_times(self):
         return DatasetSpikeStats.spike_tensor_to_points(self.spike_tensor[:, :, 0].flatten(0, 1).T)
 
-    def get_pred_spike_times(self, n, seed=42):
+    def get_pred_spike_times(self, idxs, n, seed=42):
         torch.manual_seed(seed)
-        total_neurons = self.pred_model_spikes.shape[3]
-        return DatasetSpikeStats.spike_tensor_to_points(self.pred_model_spikes[:, :, 0, torch.randperm(total_neurons)[:n]].flatten(0, 1).T)
+        spikes = self.unperm_pred_model_spikes[:, 0, idxs]
+        spikes = spikes.permute(0, 2, 1, 3, 4)
+        spikes = spikes.flatten(0, 1)
+        spikes = spikes.flatten(1, 3)
+
+        total_neurons = spikes.shape[1]
+        idx = torch.randperm(total_neurons)[:n]
+        spikes = spikes[:, idx]
+
+        return DatasetSpikeStats.spike_tensor_to_points(spikes.T)
 
     @staticmethod
     def get_raster(model, clips, n_trials=8):

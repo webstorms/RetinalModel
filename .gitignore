@@ -9,5 +9,8 @@ src.egg-info
 # PyCharm
 .idea
 
+# Mat files
+*.mat
+
 # Jupyter Notebook
 .ipynb_checkpoints
