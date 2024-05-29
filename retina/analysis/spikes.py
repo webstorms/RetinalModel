@@ -101,6 +101,7 @@ class DatasetSpikeStats:
 
     def __init__(self, root, istrain, dataset_name, spatial_scale, max_dim, min_cv_spikes=3, pred_offset=128, repeats=5, luminance=1.0, get_model_responses=False):
         dataset = loader.load(root, istrain, dataset_name, spatial_scale, max_dim, luminance=luminance, cell_idx=None)
+        self.dataset = dataset
         self.x = dataset._transformed_x.unsqueeze(1)
         self.spike_tensor = dataset._transformed_y
         self.exp_stats = SpikeStats(self.spike_tensor, min_cv_spikes)

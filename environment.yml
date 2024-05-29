@@ -10,6 +10,7 @@ dependencies:
   - pip:
       - h5py
       - jupyter
-      - scikit-learn
-      - brainbox
+      - scikit-learn==1.3.2
+      - devtorch==0.0.1
+      - brainbox==0.0.7
       - --editable .
