@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from brainbox import models
+import devtorch
 
 
-class GLM(models.BBModel):
+class GLM(devtorch.DevModel):
 
     MODEL_HZ = 240
 

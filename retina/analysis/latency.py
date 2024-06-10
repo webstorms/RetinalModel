@@ -4,8 +4,8 @@ import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from brainbox import models, trainer
 import brainbox.physiology as phys
+import devtorch
 
 from retina import train, analysis
 import retina.neural.dataset as neural
@@ -142,7 +142,7 @@ class NoiseReconstructionDataset(torch.utils.data.Dataset):
         return {"pred_offset": self._pred_offset, "noise": self._noise, "length": self._length, "noise_target": self._noise_target, "code": self._code}
 
 
-class LN(models.BBModel):
+class LN(devtorch.DevModel):
 
     def __init__(self):
         super().__init__()
@@ -158,10 +158,10 @@ class LN(models.BBModel):
         return out
 
 
-class LNTrainer(trainer.Trainer):
+class LNTrainer(devtorch.Trainer):
 
     def __init__(self, root, model, train_dataset, n_epochs, batch_size, lr, lam, shuffle=True, device="cuda", id=None):
-        super().__init__(root, model, train_dataset, n_epochs, batch_size, lr, optimizer_func=torch.optim.Adam, scheduler_func=None, scheduler_kwargs={}, loader_kwargs={"shuffle": shuffle}, device=device, grad_clip_type=None, grad_clip_value=0, id=id)
+        super().__init__(model, train_dataset, root, n_epochs, batch_size, lr, optimizer_func=torch.optim.Adam, scheduler_func=None, scheduler_kwargs={}, loader_kwargs={"shuffle": shuffle}, device=device, grad_clip_type=None, grad_clip_value=0, id=id)
         self._lam = lam
 
     @staticmethod
@@ -172,7 +172,7 @@ class LNTrainer(trainer.Trainer):
 
             return analysis.LN()
 
-        return trainer.load_model(root, model_id, model_loader)
+        return devtorch.load_model(root, model_id, model_loader)
 
     @property
     def hyperparams(self):
@@ -199,7 +199,7 @@ class LNTrainer(trainer.Trainer):
         super().train(save)
 
 
-class CrossValidationLNTrainer(trainer.KFoldValidationTrainer):
+class CrossValidationLNTrainer(devtorch.KFoldValidationTrainer):
 
     LAMBDAS = [10**-4.5, 10**-5, 10**-5.5, 10**-6, 10**-6.5]
 

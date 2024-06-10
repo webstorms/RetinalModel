@@ -7,6 +7,8 @@ dependencies:
   - matplotlib
   - seaborn
   - pandas
+  - nb_conda_kernels
+  - ipywidgets
   - pip:
       - h5py
       - jupyter

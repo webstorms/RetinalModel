@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from brainbox.models import BBModel
+import devtorch
 
 
 class FastSigmoid(torch.autograd.Function):
@@ -24,7 +24,7 @@ class FastSigmoid(torch.autograd.Function):
         return grad, None
 
 
-class SNN(BBModel):
+class SNN(devtorch.DevModel):
 
     def __init__(self, n_out, init_beta):
         super().__init__()

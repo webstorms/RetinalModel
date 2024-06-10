@@ -2,12 +2,12 @@ from pathlib import Path
 
 import torch
 import torch.nn.functional as F
-from brainbox import trainer
+import devtorch
 
 from retina.neural.glm import GLM
 
 
-class Trainer(trainer.Trainer):
+class Trainer(devtorch.Trainer):
 
     def __init__(self, root, model, train_dataset, n_epochs, batch_size, lr, lam, shuffle=True, device="cuda", id=None):
         super().__init__(root, model, train_dataset, n_epochs, batch_size, lr, optimizer_func=torch.optim.Adam, scheduler_func=None, scheduler_kwargs={}, loader_kwargs={"shuffle": shuffle}, device=device, grad_clip_type=None, grad_clip_value=0, id=id)
@@ -21,7 +21,7 @@ class Trainer(trainer.Trainer):
 
             return GLM(model_params["n_in"], model_params["n_out"], model_params["h"], model_params["w"], model_params["rf_len_ms"])
 
-        return trainer.load_model(root, model_id, model_loader)
+        return devtorch.load_model(root, model_id, model_loader)
 
     @staticmethod
     def prediction_loss(output, target):
@@ -58,7 +58,7 @@ class Trainer(trainer.Trainer):
         super().train(save)
 
 
-class CrossValidationTrainer(trainer.KFoldValidationTrainer):
+class CrossValidationTrainer(devtorch.KFoldValidationTrainer):
 
     def __init__(self, root, model, train_dataset, n_epochs, batch_size, lr, k, lambdas, final_epochs=None):
         Path(root).mkdir(parents=True, exist_ok=True)

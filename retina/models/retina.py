@@ -2,13 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from brainbox.models import BBModel
+import devtorch
 
 from .snn import SNN
 
 
-class RetinaModel(BBModel):
-
+class RetinaModel(devtorch.DevModel):
+    
     def __init__(self, params):
         super().__init__()
         self.params = params
@@ -24,11 +24,11 @@ class RetinaModel(BBModel):
         # Initialise weights
         k_encoder = params.encoder_span * params.rf_size * params.rf_size
         self.init_weight(self._encoder_weight, "uniform", a=-1 / np.sqrt(k_encoder), b=1 / np.sqrt(k_encoder))
-        self.init_weight(self._encoder_bias, "constant", c=0)
+        self.init_weight(self._encoder_bias, "constant", val=0)
 
         k_decoder = params.n_in * params.decoder_span
         self.init_weight(self._decoder_weight, "uniform", a=-1 / np.sqrt(k_decoder), b=1 / np.sqrt(k_decoder))
-        self.init_weight(self._decoder_bias, "constant", c=0)
+        self.init_weight(self._decoder_bias, "constant", val=0)
 
     @property
     def hyperparams(self):
