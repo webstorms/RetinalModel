@@ -78,7 +78,7 @@ class SNN(devtorch.DevModel):
             if mode == "val":
                 mem_list.append(new_mem)
 
-        if mode == "train":
+        if mode == "train" or mode == "val_curr":
             return torch.stack(spike_list, dim=2), torch.stack(abs_rec_current_list, dim=2)
         elif mode == "val":
             return torch.stack(spike_list, dim=2), torch.stack(mem_list, dim=2), torch.stack(abs_rec_current_list, dim=2)

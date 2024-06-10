@@ -78,6 +78,11 @@ class RetinaModel(devtorch.DevModel):
             abs_rec = neuron_outputs[2]
 
             return output, spikes, mem, abs_rec, input_current
+        elif mode == "val_curr":
+            abs_graded_current = abs_input_current.mean()
+            abs_rec_current = neuron_outputs[1].mean()
+
+            return abs_graded_current, abs_rec_current
 
     def _spikes_to_predicted_clip(self, spikes, decoder_weight):
         _, _, sim_length = spikes.shape
