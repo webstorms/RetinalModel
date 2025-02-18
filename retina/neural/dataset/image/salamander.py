@@ -2,7 +2,7 @@ import h5py
 import torch
 import numpy as np
 import pandas as pd
-from brainbox.datasets import transforms
+from brainbox import transforms
 
 from ..base import NeuralDataset
 

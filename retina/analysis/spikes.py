@@ -1,11 +1,13 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
 import pandas as pd
-from brainbox.physiology import spiking as spiking_phys
+from brainbox import spiking as spiking_phys
 
 from retina import train
 import retina.dataset as retina_dataset
 from retina.neural.dataset import loader
+from retina.analysis import rf
 
 
 class AllDatasetSpikeStats:
@@ -19,6 +21,10 @@ class AllDatasetSpikeStats:
 
         self.model_img_stats = ModelDatasetSpikeStats(root, min_cv_spikes=3, pred_offset=128, repeats=5, img=True)
         self.model_movie_stats = ModelDatasetSpikeStats(root, min_cv_spikes=3, pred_offset=128, repeats=5, img=False)
+        self.norec_model_img_stats = ModelDatasetSpikeStats(root, min_cv_spikes=3, pred_offset=128, repeats=5, img=True, ablate_recurrence=True)
+        self.norec_model_movie_stats = ModelDatasetSpikeStats(root, min_cv_spikes=3, pred_offset=128, repeats=5, img=False, ablate_recurrence=True)
+        self.compression_model_img_stats = ModelDatasetSpikeStats(root, min_cv_spikes=3, pred_offset=0, repeats=5, img=True)
+        self.compression_model_movie_stats = ModelDatasetSpikeStats(root, min_cv_spikes=3, pred_offset=0, repeats=5, img=False)
 
     def get_spike_rate_df(self, img=False):
         return self._build_metric_comparison_df("spike_rate", img)
@@ -29,6 +35,56 @@ class AllDatasetSpikeStats:
     def get_fano_df(self, img=False):
         return self._build_metric_comparison_df("fano", img)
 
+    def get_image_CC(self, pairs=2000, bin_dt=24):
+        lag_list, correlation_list, label_list, colour_list = [], [], [], []
+        lag, correlation = self.sal_img_stats.exp_stats.get_synchronization(pairs=pairs, seed=0, bin_dt=bin_dt)
+        lag_list.append(lag)
+        correlation_list.append(correlation)
+        label_list.append("Salamander")
+        colour_list.append("gray")
+        lag, correlation = self.model_img_stats.exp_stats.get_synchronization(pairs=pairs, seed=0, bin_dt=bin_dt)
+        lag_list.append(lag)
+        correlation_list.append(correlation)
+        label_list.append("Prediction model")
+        colour_list.append("#1f78b4")
+        lag, correlation = self.norec_model_img_stats.exp_stats.get_synchronization(pairs=pairs, seed=0, bin_dt=bin_dt)
+        lag_list.append(lag)
+        correlation_list.append(correlation)
+        label_list.append("Pred. model (no rec.)")
+        colour_list.append("deepskyblue")
+        lag, correlation = self.compression_model_img_stats.exp_stats.get_synchronization(pairs=pairs, seed=0, bin_dt=bin_dt)
+        lag_list.append(lag)
+        correlation_list.append(correlation)
+        label_list.append("Encoding model")
+        colour_list.append("#ff7f00")
+
+        return lag_list, correlation_list, label_list, colour_list
+
+    def get_movie_CC(self, pairs=2000, bin_dt=24):
+        lag_list, correlation_list, label_list, colour_list = [], [], [], []
+        lag, correlation = self.mouse_movie_stats.exp_stats.get_synchronization(pairs=pairs, seed=0, bin_dt=bin_dt)
+        lag_list.append(lag)
+        correlation_list.append(correlation)
+        label_list.append("Mouse")
+        colour_list.append("gray")
+        lag, correlation = self.model_movie_stats.exp_stats.get_synchronization(pairs=pairs, seed=0, bin_dt=bin_dt)
+        lag_list.append(lag)
+        correlation_list.append(correlation)
+        label_list.append("Prediction model")
+        colour_list.append("#1f78b4")
+        lag, correlation = self.norec_model_movie_stats.exp_stats.get_synchronization(pairs=pairs, seed=0, bin_dt=bin_dt)
+        lag_list.append(lag)
+        correlation_list.append(correlation)
+        label_list.append("Pred. model (no rec.)")
+        colour_list.append("deepskyblue")
+        lag, correlation = self.compression_model_movie_stats.exp_stats.get_synchronization(pairs=pairs, seed=0, bin_dt=bin_dt)
+        lag_list.append(lag)
+        correlation_list.append(correlation)
+        label_list.append("Encoding model")
+        colour_list.append("#ff7f00")
+
+        return lag_list, correlation_list, label_list, colour_list
+
     def _build_metric_comparison_df(self, metric_func, img):
         list_data = []
 
@@ -37,13 +93,17 @@ class AllDatasetSpikeStats:
                 ("sal_img_stats", self.sal_img_stats),
                 ("macaque_img_stats", self.macaque_img_stats),
                 ("model_img_stats", self.model_img_stats),
+                ("norec_model_img_stats", self.norec_model_img_stats),
+                ("compression_model_img_stats", self.compression_model_img_stats),
             ]
         else:
             sources = [
                 ("macaque_movie_stats", self.macaque_movie_stats),
                 ("marmoset_movie_stats", self.marmoset_movie_stats),
                 ("mouse_movie_stats", self.mouse_movie_stats),
-                ("model_movie_stats", self.model_movie_stats)
+                ("model_movie_stats", self.model_movie_stats),
+                ("norec_model_movie_stats", self.norec_model_movie_stats),
+                ("compression_model_movie_stats", self.compression_model_movie_stats)
             ]
 
         for name, dataset in sources:
@@ -54,13 +114,17 @@ class AllDatasetSpikeStats:
 
         # Rename for plots
         data_df = pd.DataFrame(list_data)
-        rename_mapping = {"sal_img_stats": "Salamander image",
-                          "macaque_img_stats": "Macaque image",
-                          "macaque_movie_stats": "Macaque movie",
-                          "marmoset_movie_stats": "Marmoset movie",
-                          "mouse_movie_stats": "Mouse movie",
-                          "model_img_stats": "Model image",
-                          "model_movie_stats": "Model movie"}
+        rename_mapping = {"sal_img_stats": "Salamander",
+                          "macaque_img_stats": "Macaque",
+                          "macaque_movie_stats": "Macaque",
+                          "marmoset_movie_stats": "Marmoset",
+                          "mouse_movie_stats": "Mouse",
+                          "model_img_stats": "Prediction model",
+                          "model_movie_stats": "Prediction model",
+                          "norec_model_img_stats": "Pred. model (no rec.)",
+                          "norec_model_movie_stats": "Pred. model (no rec.)",
+                          "compression_model_img_stats": "Encoding model",
+                          "compression_model_movie_stats": "Encoding model"}
         data_df["animal"] = data_df["animal"].map(rename_mapping)
         data_df["data"] = data_df["data"].map({"exp": "Data"})
 
@@ -69,11 +133,12 @@ class AllDatasetSpikeStats:
 
 class ModelDatasetSpikeStats:
 
-    def __init__(self, root, min_cv_spikes=3, pred_offset=128, repeats=5, img=True, dataset_path="/home/datasets/natural"):
+    def __init__(self, root, min_cv_spikes=3, pred_offset=128, repeats=5, img=True, dataset_path="/home/datasets/natural", ablate_recurrence=False, patchify=False):
         if img:
             dataset = loader.load(root, False, "SalamanderImage", 0.1171875, 30.0, 1.0, cell_idx=None)
             self.x = dataset._transformed_x.unsqueeze(1)
-
+            if patchify:
+                self.x = self.x[:, :, :, 5:-5, 5:-5]
         else:
             import random
             random.seed(42)
@@ -82,7 +147,7 @@ class ModelDatasetSpikeStats:
             self.x = torch.stack([test_dataset[i][0] for i in range(20)])
 
         prediction_model = train.Trainer.load_model(f"{root}/results", f"0.0031622776601683794_*_0.01_0.6_{pred_offset}_8")
-        pred_model_spikes = DatasetSpikeStats.get_raster(prediction_model, self.x, repeats)
+        pred_model_spikes = DatasetSpikeStats.get_raster(prediction_model, self.x, repeats, ablate_recurrence)
         self.pred_model_spikes = pred_model_spikes.permute(0, 3, 1, 2, 4, 5).flatten(3, 5)
         self.exp_stats = SpikeStats(self.pred_model_spikes, min_cv_spikes)
 
@@ -132,14 +197,14 @@ class DatasetSpikeStats:
         return DatasetSpikeStats.spike_tensor_to_points(spikes.T)
 
     @staticmethod
-    def get_raster(model, clips, n_trials=8):
+    def get_raster(model, clips, n_trials=8, ablate_recurrence=False):
         unit_raster_list = []
 
         for i in range(clips.shape[0]):
             trial_unit_raster_list = []
             for _ in range(n_trials):
                 with torch.no_grad():
-                    spikes = model(clips[i:i+1].cuda(), mode="just_spikes", stride=4)
+                    spikes = model(clips[i:i+1].cuda(), mode="just_spikes", stride=4, ablate_recurrence=ablate_recurrence)
                     trial_unit_raster_list.append(spikes)
 
             spikes = torch.cat(trial_unit_raster_list)
@@ -186,7 +251,59 @@ class SpikeStats:
         return torch.Tensor([neuron_cvs[neuron_cvs != -1].mean() for neuron_cvs in cvs.permute(1, 0)])
 
     @property
+    def synchronization(self):
+        return self.get_synchronization(pairs=1000, seed=0, bin_dt=33)[1]
+
+    def get_synchronization(self, pairs=1000, seed=0, bin_dt=33, from_idxs=None, to_idxs=None):
+        torch.manual_seed(seed)
+        reshaped_spikes = self.spike_tensor[:, :, 0, :].permute(0, 2, 1)
+        cross_covariance_tensor = spiking_phys.compute_synchronization(reshaped_spikes, pairs, dt=4, bin_dt=bin_dt, normalize=False, from_idxs=from_idxs, to_idxs=to_idxs)
+        synchronization_df = spiking_phys.compute_synchronization_df(cross_covariance_tensor.mean(0), dt=bin_dt)
+
+        mean_synchronization = synchronization_df.groupby("lag").mean()
+        lag = mean_synchronization.index / 1000
+        correlation = mean_synchronization["correlation"].values
+
+        return lag.values, correlation
+
+    @property
     def fano(self):
         fano_factors = self.spike_variance / self.spike_count
 
         return fano_factors
+
+
+class UnitResponseCorrelation:
+
+    def __init__(self, root, model_states):
+        self.model_states = model_states
+        model = train.Trainer.load_model(f"{root}/results", "0.0031622776601683794_*_0.01_0.6_128_8")
+        self.rf_query = rf.RFQuery(root, model)
+        self.cc_matrix = self._build_correlation_matrix()
+
+    @property
+    def unit_cc_df(self):
+        data = []
+        for i in range(4):
+            data.append({"type": "Same", "v": self.cc_matrix[i, i].item()})
+        for i in range(4):
+            for j in range(4):
+                if i != j:
+                    data.append({"type": "Different", "v": self.cc_matrix[i, j].item()})
+
+        return pd.DataFrame(data)
+
+    def _build_correlation_matrix(self):
+        cc_matrix = torch.zeros(4, 4)
+        torch.manual_seed(1)
+        for i in range(4):
+            for j in range(4):
+                from_idxs = self._get_unit_type_idxs(i)
+                to_idxs = self._get_unit_type_idxs(j)
+                cc = self.model_states.exp_stats.get_synchronization(pairs=1000, seed=0, bin_dt=33, from_idxs=from_idxs, to_idxs=to_idxs)
+                cc_matrix[i, j] = cc[1][int(len(cc[1])//2)]
+        return cc_matrix
+
+    def _get_unit_type_idxs(self, unit_type):
+        query = self.rf_query.params_df["type"] == unit_type
+        return torch.Tensor(self.rf_query.params_df[query].og_index.values)

@@ -3,7 +3,7 @@ import random
 import h5py
 import torch
 import numpy as np
-from brainbox.datasets.transforms import ClipRandomHorizontalFlip, ClipExtend
+from brainbox.transforms import ClipRandomHorizontalFlip, ClipExtend
 
 
 class PatchNaturalDataset(torch.utils.data.Dataset):

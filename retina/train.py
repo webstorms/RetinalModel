@@ -40,7 +40,7 @@ class Trainer(devtorch.Trainer):
     def hyperparams(self):
         return {**super().hyperparams, "lam": self._lam, "gamma": self._gamma, "warmup": self._warmup, "crop": self._crop}
 
-    def on_epoch_complete(self, save):
+    def on_epoch_complete(self, save, epoch):
 
         def _write_and_reset_loss_variables():
             train_loss = self.log["train_loss"][-1]
@@ -64,7 +64,7 @@ class Trainer(devtorch.Trainer):
         _write_and_reset_loss_variables()
         if save:
             _save_model_if_best()
-            self.save_model_log()  # Incase we do not complete all epochs
+            self.save_log()  # Incase we do not complete all epochs
 
     def loss(self, output, target, model):
         abs_graded_current = output[1]

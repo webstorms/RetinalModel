@@ -4,8 +4,8 @@ import torch
 import numpy as np
 import pandas as pd
 
-from brainbox.physiology import tuning, spiking
-from brainbox.datasets.transforms import GaussianKernel
+from brainbox import tuning, spiking
+from brainbox.transforms import GaussianKernel
 
 
 class GratingQuery:
@@ -154,9 +154,10 @@ class TextureMotion:
 
 class DifferentialMotion:
 
-    def __init__(self, model, unit_idx, theta, spatial_freq, temporal_freq, y0, x0, r, lum=1):
+    def __init__(self, model, unit_idx, theta, spatial_freq, temporal_freq, y0, x0, r, lum=1, moving_background=False):
         self.grating = self._generate_grating(theta, spatial_freq, temporal_freq) * lum
-        self.masked_grating = self._mask_grating(self.grating, y0, x0, r)
+        self.grating2 = self._generate_grating(np.pi-theta, spatial_freq*1.5, temporal_freq) * lum
+        self.masked_grating = self._mask_grating(y0, x0, r, moving_background)
         self.global_raster_x, self.global_raster_y = TextureMotion.spike_tensor_to_points(TextureMotion.get_raster(model, unit_idx, self.grating))
         self.local_raster_x, self.local_raster_y = TextureMotion.spike_tensor_to_points(TextureMotion.get_raster(model, unit_idx, self.masked_grating))
 
@@ -178,8 +179,8 @@ class DifferentialMotion:
 
         return tuning.GratingsProber.generate_grating(1, 20, 20, theta, spatial_freq, temporal_freq, duration=probe_ms+warmup_period*dt, dt=dt)
 
-    def _mask_grating(self, grating, x0, y0, r):
-        mask = torch.zeros_like(grating)
+    def _mask_grating(self, x0, y0, r, moving_background):
+        mask = torch.zeros_like(self.grating)
 
         for i in range(20):
             for j in range(20):
@@ -187,7 +188,10 @@ class DifferentialMotion:
                 if d <= r:
                     mask[:, i, j] = 1
 
-        return mask * grating
+        if not moving_background:
+            return mask * self.grating
+        else:
+            return mask * self.grating + (1-mask) * self.grating2
 
     def _get_current(self, model, unit_idx, grating, n_trials=8):
         warmup_period = 10

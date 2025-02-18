@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 from sklearn.decomposition import IncrementalPCA
-from brainbox.datasets.transforms import GaussianKernel
+from brainbox.transforms import GaussianKernel
 
 from retina.neural.dataset import loader, base
 

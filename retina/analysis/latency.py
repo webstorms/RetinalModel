@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import brainbox.physiology as phys
+import brainbox.neural
 import devtorch
 
 from retina import train, analysis
@@ -178,10 +178,10 @@ class LNTrainer(devtorch.Trainer):
     def hyperparams(self):
         return {**super().hyperparams, "lam": self._lam}
 
-    def on_epoch_complete(self, save):
+    def on_epoch_complete(self, save, epoch):
         if save:
             self.save_model()
-            self.save_model_log()
+            self.save_log()
             self.save_hyperparams()
 
     def loss(self, output, target, model):
@@ -253,4 +253,4 @@ class LNFitAccBuilder:
             x = self.test_dataset.x.flatten(1, 3)
             prediction = self.readout(x.cuda()).cpu()
 
-            return phys.neural.cc(prediction.flatten(1, 2).cpu(), self.test_dataset.y.flatten(1, 2))
+            return brainbox.neural.cc(prediction.flatten(1, 2).cpu(), self.test_dataset.y.flatten(1, 2))

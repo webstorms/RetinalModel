@@ -36,11 +36,11 @@ class Trainer(devtorch.Trainer):
     def hyperparams(self):
         return {**super().hyperparams, "lam": self._lam}
 
-    def on_epoch_complete(self, save):
+    def on_epoch_complete(self, save, epoch):
         # Save logs and hyperparams
         if save:
             self.save_model()
-            self.save_model_log()
+            self.save_log()
             self.save_hyperparams()
 
     def loss(self, output, target, model):

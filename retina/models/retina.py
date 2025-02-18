@@ -8,7 +8,7 @@ from .snn import SNN
 
 
 class RetinaModel(devtorch.DevModel):
-    
+
     def __init__(self, params):
         super().__init__()
         self.params = params
@@ -34,7 +34,7 @@ class RetinaModel(devtorch.DevModel):
     def hyperparams(self):
         return {**super().hyperparams, "params": self.params.hyperparams}
 
-    def forward(self, x, mode="train", stride=1):
+    def forward(self, x, mode="train", stride=1, ablate_recurrence=False):
         # x: b x n x t x h x w
         if mode in ["train", "val"]:
             assert x.shape[-1] == x.shape[-2]
@@ -58,9 +58,9 @@ class RetinaModel(devtorch.DevModel):
         # Obtain neuron outputs
         if mode == "just_spikes":
             # This will return spikes over all spatial locations
-            return self._neurons(input_current[:, :, :], mode)[0]
+            return self._neurons(input_current[:, :, :], mode, ablate_recurrence)[0]
 
-        neuron_outputs = self._neurons(input_current[:, :, :, 0, 0], mode)
+        neuron_outputs = self._neurons(input_current[:, :, :, 0, 0], mode, ablate_recurrence)
         spikes = neuron_outputs[0]
 
         # Decode neuron spikes to output frame
@@ -79,8 +79,8 @@ class RetinaModel(devtorch.DevModel):
 
             return output, spikes, mem, abs_rec, input_current
         elif mode == "val_curr":
-            abs_graded_current = abs_input_current.mean()
-            abs_rec_current = neuron_outputs[1].mean()
+            abs_graded_current = abs_input_current
+            abs_rec_current = neuron_outputs[1]
 
             return abs_graded_current, abs_rec_current
 

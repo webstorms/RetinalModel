@@ -5,7 +5,7 @@ import devtorch
 
 
 class FastSigmoid(torch.autograd.Function):
-
+    
     @staticmethod
     def forward(ctx, input, scale=100):
         ctx.scale = scale
@@ -47,9 +47,8 @@ class SNN(devtorch.DevModel):
     def recurrent_weight(self):
         return self._recurrent_weight * self._no_self_connection_mask
 
-    def forward(self, x, mode="train"):
+    def forward(self, x, mode="train", ablate_recurrence=False):
         # x: b x n x t
-
         mem_list = []
         spike_list = []
         abs_rec_current_list = []
@@ -64,7 +63,9 @@ class SNN(devtorch.DevModel):
             rec_current = torch.einsum("ij, bj... -> bi...", self.recurrent_weight, spikes)
             abs_rec_current = torch.einsum("ij, bj... -> bi...", self.recurrent_weight.abs(), spikes)
             abs_rec_current_list.append(abs_rec_current)
-            input_current = input_current + rec_current
+
+            if not ablate_recurrence:
+                input_current = input_current + rec_current
 
             # Update membrane potentials
             new_mem = torch.einsum("bn..., n -> bn...", mem, self.beta) + input_current

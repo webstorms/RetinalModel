@@ -1,13 +1,49 @@
 import torch
+import pandas as pd
 import torch.nn.functional as F
-from brainbox.datasets.transforms import GaussianKernel
+from scipy.signal import find_peaks
+from brainbox.transforms import GaussianKernel
 
 from retina import train
 
 
+class OSRQuerySet:
+
+    def __init__(self, root, pred_offset=128, ablate_recurrence=False):
+        self.ors_query_8hz = OSRQuery(root, pred_offset=pred_offset, start_ms=150, duration_ms=1300, end_ms=300, hz=8, ablate_recurrence=ablate_recurrence)
+        self.ors_query_12hz = OSRQuery(root, pred_offset=pred_offset, start_ms=150, duration_ms=1300, end_ms=300, hz=12, ablate_recurrence=ablate_recurrence)
+        self.ors_query_16hz = OSRQuery(root, pred_offset=pred_offset, start_ms=150, duration_ms=1300, end_ms=300, hz=16, ablate_recurrence=ablate_recurrence)
+        self.ors_query_20hz = OSRQuery(root, pred_offset=pred_offset, start_ms=150, duration_ms=1300, end_ms=300, hz=20, ablate_recurrence=ablate_recurrence)
+        self.ors_idx = self._find_intersection([self.ors_query_12hz.OSR_idx, self.ors_query_16hz.OSR_idx, self.ors_query_20hz.OSR_idx])
+
+    def get_latency_df(self):
+        data_list = []
+        osr_query_list = [self.ors_query_8hz, self.ors_query_12hz, self.ors_query_16hz, self.ors_query_20hz]
+
+        for osr_query in osr_query_list:
+            for i, latency in enumerate(self._get_latencies(osr_query.firing_rate[self.ors_idx])):
+                data_list.append({"i": i, "period": int(f"{1000/osr_query.hz:.0f}"), "latency": latency})
+
+        return pd.DataFrame(data_list)
+
+    def _get_latencies(self, firing_rates):
+        latency_list = []
+        for i in range(firing_rates.shape[0]):
+            peaks, _ = find_peaks(firing_rates[i], prominence=0.041)
+            latency_list.append((peaks[-1]-peaks[-2])*4.333)
+        return latency_list
+
+    def _find_intersection(self, lists):
+        intersection_set = set(lists[0])
+        for lst in lists[1:]:
+            intersection_set.intersection_update(lst)
+
+        return list(intersection_set)
+
+
 class OSRQuery:
 
-    def __init__(self, root, pred_offset=128, consume_pad=29, start_ms=200, duration_ms=1400, end_ms=200, flash_duration=40, n_trials=8, hz=12, middle_omission=False):
+    def __init__(self, root, pred_offset=128, consume_pad=29, start_ms=200, duration_ms=1400, end_ms=200, flash_duration=40, n_trials=8, hz=12, middle_omission=False, ablate_recurrence=False):
         self._model = train.Trainer.load_model(f"{root}/results", f"0.0031622776601683794_*_0.01_0.6_{pred_offset}_8")
         self._consume_pad = consume_pad
         self._start_ms = start_ms
@@ -16,6 +52,8 @@ class OSRQuery:
         self._flash_duration = flash_duration
         self._n_trials = n_trials
         self._middle_omission = middle_omission
+        self._ablate_recurrence = ablate_recurrence
+        self.hz = hz
 
         self._flash_clip = self._generate_flash_sequence(hz)
         self._spikes = self._get_raster_responses()
@@ -44,12 +82,12 @@ class OSRQuery:
 
     @property
     def OSR_idx(self):
-        return [idx for idx in self.responsive_idx if self._is_OSR(self.firing_rate[idx])]
+        return [idx.item() for idx in self.responsive_idx if self._is_OSR(self.firing_rate[idx])]
 
     def _get_raster_responses(self):
         with torch.no_grad():
             torch.manual_seed(42)
-            spikes = self._model(self._flash_clip, "just_spikes").cpu()
+            spikes = self._model(self._flash_clip, "just_spikes", ablate_recurrence=self._ablate_recurrence).cpu()
 
         return spikes
 

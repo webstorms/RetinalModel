@@ -1,6 +1,6 @@
 import torch
 import pandas as pd
-import brainbox.physiology as phys
+import brainbox
 
 import retina.neural.train as train
 import retina.neural.pca as pca
@@ -50,7 +50,7 @@ class FitMetricsBuilder:
         pred_y = pred_y.flatten(0, 1).permute(1, 0)
         target_y = target_y.flatten(0, 1).permute(1, 0)
 
-        return phys.neural.cc(pred_y, target_y)
+        return brainbox.neural.cc(pred_y, target_y)
 
 
 class FitMetricsSummary:

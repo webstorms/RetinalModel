@@ -11,3 +11,6 @@ def train(lam, noise_type, photo_noise, ganglion_noise, pred_ms, decoder_span=16
 
 for pred_ms in [0, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 96, 112, 128, 136, 144, 152]:
     train(10**-2.5, "*", 0.01, 0.6, pred_ms, 8)
+
+# Train prediction model without any metabolic regularization
+train(0, "*", 0.01, 0.6, 128, 8)
