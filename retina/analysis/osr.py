@@ -109,7 +109,7 @@ class OSRQuery:
 
         if self._middle_omission:
             assert hz == 16
-            clip[:, :, 228:241] = 1
+            clip[:, :, 228:241+13] = 1
 
         return clip
 
