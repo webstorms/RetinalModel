@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
-import brainbox.rfs as rfs
+import brainbox.rfs as rfs#brainbox.physiology.rfs
 from brainbox.rfs.gaussian import fit, query
 
 
@@ -22,7 +22,7 @@ class RFQuery:
 
         if not os.path.exists(f"{root}/data/rf/gaus.csv"):
             fit.GaussianFitter().fit_spatial(f"{root}/data/rf/gaus.csv", self.rfs, 200, n_spatial_iterations=4000, spatial_lr=1e-1)
-        
+
         self.fit_query = query.GaussianQuery(f"{root}/data/rf/gaus.csv", self.og_strfs)
         self.params_df, self.spatial_rfs, self.gaussians, self.strfs = self.fit_query.validate(min_cc=min_cc, min_env=min_env)
         self.params_df = self.params_df.copy()
@@ -30,11 +30,7 @@ class RFQuery:
         self.params_df["index"] = list(range(len(self.params_df)))
         self.params_df = self.params_df.reset_index()
         self.params_df = self.params_df.set_index("index")
-        try:
-            # This throws an exception for the encoding model as it lacks parasol-like units
-            self.params_df["first_pc"], self.params_df["type"] = self._get_cell_type()
-        except:
-            pass
+        self.params_df["first_pc"], self.params_df["type"] = self._get_cell_type()
         self.params_df = self.params_df.rename(columns={"level_0": "og_index"})
 
     def _build_strfs(self, model, rf_len=36, t_len=100, noise_var=10, samples=200, batch_size=50, rf_h=20, rf_w=20, device="cuda", **kwargs):

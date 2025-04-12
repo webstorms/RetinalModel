@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 
 
-def generate_bar_frame(bar_w, x, kernel, min_l=-1, max_l=1):
+def generate_bar_frame(bar_w, x, kernel, min_l=-1.5, max_l=0):
     kernel = max_l * torch.ones(kernel, kernel)
     s = max(0, x)
     e = max(0, x+bar_w)
@@ -11,12 +11,12 @@ def generate_bar_frame(bar_w, x, kernel, min_l=-1, max_l=1):
     return kernel
 
 
-def generate_flash_bar_sequence(begin_pad, end_pad, n_frames, x=17, bar_w=5, kernel=20, min_l=-1, max_l=1):
+def generate_flash_bar_sequence(begin_pad, end_pad, n_frames, x=17, bar_w=5, kernel=20, min_l=-1.5, max_l=0):
     frames_list = [generate_bar_frame(bar_w, x, kernel, min_l, max_l) for _ in range(n_frames)]
     return gen_clip(begin_pad, end_pad, frames_list, max_l)
 
 
-def generate_moving_bar_sequence(begin_pad, end_pad, start_x, end_x, dx=1, bar_w=5, kernel=20, min_l=-1, max_l=1):
+def generate_moving_bar_sequence(begin_pad, end_pad, start_x, end_x, dx=1, bar_w=5, kernel=20, min_l=-1.5, max_l=0):
     frames_list = []
 
     dpx = 1 if end_x > start_x else -1
@@ -38,7 +38,7 @@ def gen_clip(begin_pad, end_pad, frames_list, lum):
 
 class AnticipationAnalysis:
 
-    def __init__(self, model, bar_width, bar_x0, luminance=1, n_repeats=20):
+    def __init__(self, model, bar_width, bar_x0, luminance=0, n_repeats=50, ablate_recurrence=False, bar_speed=37):
         # bar_x0 is left edge starting position
 
         self.consume_length = 29  # number of frames consumed by model to produce single output frame
@@ -47,9 +47,9 @@ class AnticipationAnalysis:
         right_moving_start_x = -bar_width + 1  # starting x value for left bar edge
         left_moving_start_x = 20  # starting x value for left bar edge
         max_l = luminance
-        min_l = -luminance
+        min_l = -1.5
 
-        dx = 37  # 8*4  # flash of bar in movie consists of dx frames (check maths in method section of the paper)
+        dx = bar_speed  # 8*4  # flash of bar in movie consists of dx frames (check maths in method section of the paper)
         self._flash_bar_clip = generate_flash_bar_sequence(begin_pad, end_pad=begin_pad, n_frames=4, x=bar_x0, bar_w=bar_width, min_l=min_l, max_l=max_l).float()
         self._right_moving_bar_clip = generate_moving_bar_sequence(begin_pad, end_pad=begin_pad, start_x=right_moving_start_x, end_x=left_moving_start_x + 1, dx=dx, bar_w=bar_width, min_l=min_l, max_l=max_l).float()
 
@@ -59,8 +59,8 @@ class AnticipationAnalysis:
         assert torch.equal(self._flash_bar_clip[0, 0, begin_pad], self._right_moving_bar_clip[0, 0, begin_pad + self._right_moving_offset])  # should match
         assert not torch.equal(self._flash_bar_clip[0, 0, begin_pad - 1], self._right_moving_bar_clip[0, 0, begin_pad + self._right_moving_offset])  # should not match
 
-        self._flash_bar_firing = self._get_firing_rate(model, self._flash_bar_clip.cuda(), n_repeats)
-        self._right_moving_bar_firing = self._get_firing_rate(model, self._right_moving_bar_clip.cuda(), n_repeats)
+        self._flash_bar_firing = self._get_firing_rate(model, self._flash_bar_clip.cuda(), n_repeats, ablate_recurrence=ablate_recurrence)
+        self._right_moving_bar_firing = self._get_firing_rate(model, self._right_moving_bar_clip.cuda(), n_repeats, ablate_recurrence=ablate_recurrence)
 
     @property
     def mean_flash_bar_firing(self):
@@ -84,11 +84,11 @@ class AnticipationAnalysis:
     def right_moving_bar_spikes_df(self, unit_idx, rel_start=-400, rel_end=400):
         return self._build_spike_times_df(self._right_moving_bar_firing[:, unit_idx, self._right_moving_offset:], rel_start=rel_start, rel_end=rel_end)
 
-    def _get_firing_rate(self, model, clip, n_repeats=40):
+    def _get_firing_rate(self, model, clip, n_repeats=40, ablate_recurrence=False):
         with torch.no_grad():
             spikes_list = []
             for _ in range(n_repeats):
-                out = model(clip, "just_spikes")
+                out = model(clip, "just_spikes", ablate_recurrence=ablate_recurrence)
                 spikes = out.cpu().detach()
                 spikes_list.append(spikes.cpu())
 
