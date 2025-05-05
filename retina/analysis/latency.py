@@ -21,7 +21,7 @@ def get_larva_sequence(root, begin_pad=29, end_pad=10, n_frames=36, lum=0.5):
         return frames_tensor
 
     def get_larva_image(root):
-        img = plt.imread(f"{root}/data/latency/proc_larva2.png")
+        img = plt.imread(f"{root}/data/figures/proc_larva.png")
         r, g, b = img[:, :, 0], img[:, :, 1], img[:, :, 2]
         img = 0.2989 * r + 0.5870 * g + 0.1140 * b
         img *= 255

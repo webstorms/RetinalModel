@@ -22,7 +22,7 @@ class RFQuery:
 
         if not os.path.exists(f"{root}/data/rf/gaus.csv"):
             fit.GaussianFitter().fit_spatial(f"{root}/data/rf/gaus.csv", self.rfs, 200, n_spatial_iterations=4000, spatial_lr=1e-1)
-        
+
         self.fit_query = query.GaussianQuery(f"{root}/data/rf/gaus.csv", self.og_strfs)
         self.params_df, self.spatial_rfs, self.gaussians, self.strfs = self.fit_query.validate(min_cc=min_cc, min_env=min_env)
         self.params_df = self.params_df.copy()
