@@ -34,7 +34,7 @@ class RetinaModel(devtorch.DevModel):
     def hyperparams(self):
         return {**super().hyperparams, "params": self.params.hyperparams}
 
-    def forward(self, x, mode="train", stride=1, ablate_recurrence=False):
+    def forward(self, x, mode="train", stride=1, ablate_recurrence=False, ablate_units=[]):
         # x: b x n x t x h x w
         if mode in ["train", "val"]:
             assert x.shape[-1] == x.shape[-2]
@@ -62,6 +62,9 @@ class RetinaModel(devtorch.DevModel):
 
         neuron_outputs = self._neurons(input_current[:, :, :, 0, 0], mode, ablate_recurrence)
         spikes = neuron_outputs[0]
+        if ablate_units:
+            if len(indices_to_delete) > 0:
+                second_array = np.delete(second_array, indices_to_delete, axis=1)
 
         # Decode neuron spikes to output frame
         output = self._spikes_to_predicted_clip(spikes, self._decoder_weight)
