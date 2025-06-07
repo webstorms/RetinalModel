@@ -208,10 +208,11 @@ class DifferentialMotion:
 
         fps = int(1000 / dt)
         n_timesteps = int(duration / dt)
-        timesteps = (
-            torch.arange(n_timesteps).view(n_timesteps, 1, 1).repeat(1, rf_h, rf_w)
-        )
-        jitter = 2*torch.randint(0, 2, (n_timesteps,)) - 1
+
+        jitter = 2 * torch.randint(0, 2, (n_timesteps,)) - 1
+        #jitter[1::4] = 0
+        #jitter[2::4] = 0
+        #jitter[3::4] = 0
         #print(jitter)
         randomwalk = torch.cumsum(jitter,dim=0)
         #print(randomwalk.shape)
@@ -246,7 +247,7 @@ class DifferentialMotion:
         for i in range(20):
             for j in range(20):
                 d = np.sqrt((x0 - i) ** 2 + (y0 - j) ** 2)
-                if d <= r*1.25:
+                if d <= r+1.1:
                     mask2[:, i, j] = 1
 
         if not moving_background:
