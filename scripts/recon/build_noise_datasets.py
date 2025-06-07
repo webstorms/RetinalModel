@@ -1,11 +1,33 @@
 import os
+import sys
 from pathlib import Path
 
+# Print Python Path before changing the working directory
+print("Before changing directory:")
+print(sys.path)
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+# Print Python Path after changing the working directory
+print("After changing directory:")
+print(sys.path)
+
+# Add the full path to retina explicitly
+sys.path.append('/home/nicolharper/Documents/LukeCodeOrig/RetinalModel-main/retina')
+
+print("After appending retina to sys.path:")
+print(sys.path)
+
+# Now try to import again
+#from retina.analysis.latency import NoiseReconstructionDatasetBuilder
+
+
+root = os.path.expanduser("~/Documents/LukeCodeOrig/RetinalModel-main")
+
+sys.path.append('/home/nicolharper/Documents/LukeCodeOrig/RetinalModel-main/retina/analysis')
+from latency import NoiseReconstructionDatasetBuilder
 import torch
 
-from retina.analysis.latency import NoiseReconstructionDatasetBuilder
-
-root = os.path.expanduser("~/PycharmProjects/RetinalModel")
 pred_offset = 128
 length = 72
 
