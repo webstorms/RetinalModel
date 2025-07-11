@@ -38,15 +38,11 @@ def plot_spatial_rfs(model_rfs, rows, cols, range_all=True, sigma=0):
 
     model_rfs = model_rfs.detach().cpu()
 
-    # Debugging line to check if sigma=0 is handled correctly
-    print(f"Sigma value: {sigma}")
-
     # Apply Gaussian blur if sigma > 0
     if sigma > 0:
         print(f"Applying Gaussian blur with sigma={sigma}")
         model_rfs = gaussian_blur(model_rfs, kernel_size=5, sigma=sigma)
-    else:
-        print("No Gaussian blur applied (sigma=0).")
+
 
     # Convert back to NumPy for plotting
     model_rfs = model_rfs.squeeze(1).numpy()  # Shape: (batch, H, W)

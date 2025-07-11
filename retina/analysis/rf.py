@@ -17,7 +17,7 @@ class RFQuery:
     MIDGET_X = 0.1
 
     def __init__(self, root, model, min_cc=0.7, min_env=0.5, t_len=100, samples=200):
-        self.og_strfs = self._build_strfs(model, t_len=t_len, samples=200)
+        self.og_strfs = self._build_strfs(model, t_len=t_len, samples=samples)
         self.rfs, self.ts_at_max = self._get_all_highest_power_spatial_rf(self.og_strfs)
         self.mean_rfs = self._get_all_mean_spatial_rf(self.og_strfs)
 
@@ -83,21 +83,33 @@ class RFQuery:
     def _get_cell_type(self):
         # Get first PC from rf temporal profile
         temp_profiles = self.strfs.mean((2, 3))
-        first_pc = PCA(n_components=1).fit_transform(temp_profiles)[:, 0]
 
-        # K-mean clustering
-        data = [(x, y) for x, y in zip(first_pc, self.params_df["size"])]
-        kmeans = KMeans(n_clusters=4, n_init=1, max_iter=1, random_state=42)
-        kmeans.fit(data)
-        init_centres = np.array([
-            [-RFQuery.PARASOL_X, RFQuery.PARASOL_Y],
-            [RFQuery.PARASOL_X, RFQuery.PARASOL_Y],
-            [-RFQuery.MIDGET_X, RFQuery.MIDGET_Y],
-            [RFQuery.MIDGET_X, RFQuery.MIDGET_Y]]).astype(np.float64)
-        kmeans.cluster_centers_ = init_centres  # Hard code those centroids
-        cell_type = kmeans.predict(data)
+        if temp_profiles.shape[0] == 0:
+            # Return nulls if there are no STRFs
+            return np.array([]), np.array([])
 
-        return first_pc, cell_type
+        try:
+            first_pc = PCA(n_components=1).fit_transform(temp_profiles)[:, 0]
+
+            # K-mean clustering
+            data = [(x, y) for x, y in zip(first_pc, self.params_df["size"])]
+            kmeans = KMeans(n_clusters=4, n_init=1, max_iter=1, random_state=42)
+            kmeans.fit(data)
+            init_centres = np.array([
+                [-RFQuery.PARASOL_X, RFQuery.PARASOL_Y],
+                [RFQuery.PARASOL_X, RFQuery.PARASOL_Y],
+                [-RFQuery.MIDGET_X, RFQuery.MIDGET_Y],
+                [RFQuery.MIDGET_X, RFQuery.MIDGET_Y]
+            ]).astype(np.float64)
+            kmeans.cluster_centers_ = init_centres  # Hard code those centroids
+            cell_type = kmeans.predict(data)
+
+            return first_pc, cell_type
+
+        except ValueError as e:
+            # If PCA fails, fallback to null values
+            print(f"Skipping PCA and cell type classification due to error: {e}")
+            return np.array([]), np.array([])
 
 
 class FlashQuery:
