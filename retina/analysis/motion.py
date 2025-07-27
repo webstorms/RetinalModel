@@ -10,12 +10,13 @@ from brainbox.transforms import GaussianKernel
 
 class GratingQuery:
 
-    def __init__(self, root, model):
+    def __init__(self, root, model, ablate_recurrence=False):#Nicol
         self._root = root
         self._model = model
+        self._ablate_recurrence = ablate_recurrence#Nicol
 
         if not os.path.exists(f"{self.tuning_path}/probe.csv"):
-            self.probe()
+            self.probe(ablate_recurrence=ablate_recurrence)
 
         self.query = tuning.TuningQuery(self.tuning_path)
         self.all_tuning_results = self.query.validate(response_threshold=0.0, fit_threshold=-1)
@@ -25,7 +26,7 @@ class GratingQuery:
     def tuning_path(self):
         return f"{self._root}/data/tuning"
 
-    def probe(self, n_trials=8):
+    def probe(self, n_trials=8, ablate_recurrence=False):
         torch.manual_seed(42)
 
         probe_ms = 3000  # Probe for 3s
@@ -40,7 +41,7 @@ class GratingQuery:
 
                 b, _, _, _, _ = data.shape
                 data = data.repeat(n_trials, 1, 1, 1, 1)
-                spike_trains = self._model(data, mode="just_spikes")[..., 0, 0]
+                spike_trains = self._model(data, mode="just_spikes", ablate_recurrence=self._ablate_recurrence)[..., 0, 0]#Nicol
                 _, n, t = spike_trains.shape
                 spike_trains = spike_trains.view(n_trials, b, n, t)
                 spike_trains = spike_trains.mean(0)
@@ -61,15 +62,15 @@ class GratingQuery:
 
 class TextureMotion:
 
-    def __init__(self, model, grating_query, unit_idx, sf=None, tf=None):
+    def __init__(self, model, grating_query, unit_idx, sf=None, tf=None, ablate_recurrence=False):
         self._grating_query = grating_query
         self._unit_idx = unit_idx
 
         self.optimal_grating = self._generate_grating(sf=sf, tf=tf)
         self.fixed_grating = self._generate_grating(sf=sf, tf=0)
 
-        self.optimal_raster_v = TextureMotion.get_raster(model, unit_idx, self.optimal_grating)
-        self.fixed_raster_v = TextureMotion.get_raster(model, unit_idx, self.fixed_grating)
+        self.optimal_raster_v = TextureMotion.get_raster(model, unit_idx, self.optimal_grating, ablate_recurrence=ablate_recurrence)
+        self.fixed_raster_v = TextureMotion.get_raster(model, unit_idx, self.fixed_grating, ablate_recurrence=ablate_recurrence)
 
         self.optimal_raster_x, self.optimal_raster_y = TextureMotion.spike_tensor_to_points(self.optimal_raster_v)
         self.fixed_raster_x, self.fixed_raster_y = TextureMotion.spike_tensor_to_points(self.fixed_raster_v)
@@ -112,11 +113,12 @@ class TextureMotion:
         return tuning.GratingsProber.generate_grating(1, 20, 20, theta, sf, tf, duration=probe_ms + warmup_period * dt, dt=dt)
 
     @staticmethod
-    def get_raster(model, unit_idx, grating, n_trials=8):
+    def get_raster(model, unit_idx, grating, n_trials=8,ablate_recurrence=False):
+        #print(ablate_recurrence)
         warmup_period = 10
 
         with torch.no_grad():
-            spikes = model(grating.unsqueeze(0).unsqueeze(0).repeat(n_trials, 1, 1, 1, 1).cuda(), mode="just_spikes")
+            spikes = model(grating.unsqueeze(0).unsqueeze(0).repeat(n_trials, 1, 1, 1, 1).cuda(), mode="just_spikes",ablate_recurrence=ablate_recurrence)
 
         return spikes[:, unit_idx, warmup_period:, 0, 0].cpu()
 
@@ -128,7 +130,7 @@ class TextureMotion:
         return x, y
 
     @staticmethod
-    def count_texture_tuned_units(model, grating_query):
+    def count_texture_tuned_units(model, grating_query, ablate_recurrence=False):
 
         def smooth(signal):
             gk = GaussianKernel(3, 101)  # 3 bins is approx 12ms
@@ -137,7 +139,7 @@ class TextureMotion:
 
         count_data = []
         for i in range(400):
-            texture_motion = TextureMotion(model, grating_query, i, sf=0.3)
+            texture_motion = TextureMotion(model, grating_query, i, sf=0.3, ablate_recurrence=ablate_recurrence)
             opt_count = texture_motion.optimal_raster_v.mean(0)
             fixed_count = texture_motion.fixed_raster_v.mean(0)
 
@@ -154,15 +156,21 @@ class TextureMotion:
 
 class DifferentialMotion:
 
-    def __init__(self, model, unit_idx, theta, spatial_freq, temporal_freq, y0, x0, r, lum=1, moving_background=False):
-        self.grating = self._generate_grating(theta, spatial_freq, temporal_freq) * lum
-        self.grating2 = self._generate_grating(np.pi-theta, spatial_freq*1.5, temporal_freq) * lum
-        self.masked_grating = self._mask_grating(y0, x0, r, moving_background)
-        self.global_raster_x, self.global_raster_y = TextureMotion.spike_tensor_to_points(TextureMotion.get_raster(model, unit_idx, self.grating))
-        self.local_raster_x, self.local_raster_y = TextureMotion.spike_tensor_to_points(TextureMotion.get_raster(model, unit_idx, self.masked_grating))
+    def __init__(self, model, unit_idx, theta, spatial_freq, temporal_freq, y0, x0, r, lum=1, probe_ms=200000, moving_background=False, ablate_recurrence=False):
+        #print("making grating")
+        self.grating = self._jittered_grating(theta, spatial_freq, temporal_freq, lum, probe_ms)
+        #self.grating = self.grating * lum
+        #self.grating_shift = self.grating_shift * lum
+        #print("making grating 2")
+        self.grating2 = self._jittered_grating(theta, spatial_freq, temporal_freq, lum, probe_ms) #was spatial_freq*1.5 and 1.*temporal_freq
+        #self.grating2 = self.grating2 * lum
+        self.masked_grating_local = self._mask_grating(y0, x0, r, moving_background=True)
+        self.masked_grating_global = self._mask_grating(y0, x0, r, moving_background=False)
+        self.global_raster_x, self.global_raster_y = TextureMotion.spike_tensor_to_points(TextureMotion.get_raster(model, unit_idx, self.masked_grating_global, ablate_recurrence=ablate_recurrence))#eye
+        self.local_raster_x, self.local_raster_y = TextureMotion.spike_tensor_to_points(TextureMotion.get_raster(model, unit_idx, self.masked_grating_local, ablate_recurrence=ablate_recurrence))#eye+object
 
-        self.global_fwd_current, self.global_rec_current = self._get_current(model, unit_idx, self.grating, n_trials=8)
-        self.local_fwd_current, self.local_rec_current = self._get_current(model, unit_idx, self.masked_grating, n_trials=8)
+        self.global_fwd_current, self.global_rec_current = self._get_current(model, unit_idx, self.masked_grating_global, n_trials=8, ablate_recurrence=ablate_recurrence)
+        self.local_fwd_current, self.local_rec_current = self._get_current(model, unit_idx, self.masked_grating_local, n_trials=8, ablate_recurrence=ablate_recurrence)
 
     @property
     def global_raster(self):
@@ -172,32 +180,86 @@ class DifferentialMotion:
     def local_raster(self):
         return self.local_raster_x, self.local_raster_y
 
-    def _generate_grating(self, theta, spatial_freq, temporal_freq):
-        probe_ms = 3000
+    def _generate_grating(self, theta, spatial_freq, temporal_freq, probe_ms=200000):
+        probe_ms = probe_ms
         dt = 1000 / 240
         warmup_period = 10
 
         return tuning.GratingsProber.generate_grating(1, 20, 20, theta, spatial_freq, temporal_freq, duration=probe_ms+warmup_period*dt, dt=dt)
 
+    def _jittered_grating(self,theta, spatial_freq, temporal_freq, lum, probe_ms=200000):
+        amplitude = lum
+        rf_w = 20
+        rf_h = 20
+        probe_ms = probe_ms # was 50000
+        dt = 1000 / 240
+        warmup_period = 10
+        duration = probe_ms + warmup_period * dt
+
+        y, x = torch.meshgrid(
+            [
+                torch.arange(rf_h, dtype=torch.float32),
+                torch.arange(rf_w, dtype=torch.float32),
+            ],
+            indexing="ij",
+        )
+        theta = torch.Tensor([theta]).expand_as(y)
+        spatial_freq = torch.Tensor([spatial_freq]).expand_as(y)
+
+        fps = int(1000 / dt)
+        n_timesteps = int(duration / dt)
+
+        jitter = 2 * torch.randint(0, 2, (n_timesteps,)) - 1
+        #jitter[1::4] = 0
+        #jitter[2::4] = 0
+        #jitter[3::4] = 0
+        #print(jitter)
+        randomwalk = torch.cumsum(jitter,dim=0)
+        #print(randomwalk.shape)
+        randomwalkgrid = (
+            randomwalk.view(n_timesteps, 1, 1).repeat(1, rf_h, rf_w)
+        )
+
+
+        rotx = x * torch.cos(theta) - y * torch.sin(theta)
+        initial_phase = 2 * np.pi * torch.rand(1)
+        #initial_phase2 = 2 * np.pi * torch.rand(1)
+        grating = amplitude * torch.sin(
+            2 * np.pi * (spatial_freq * rotx - temporal_freq * randomwalkgrid / fps) + initial_phase
+        )
+        #grating_shift = amplitude * torch.sin(
+        #    2 * np.pi * (spatial_freq * rotx - temporal_freq * randomwalkgrid / fps) + initial_phase2
+        #)
+
+        return grating#, grating_shift
+
+
     def _mask_grating(self, x0, y0, r, moving_background):
-        mask = torch.zeros_like(self.grating)
+        mask1 = torch.zeros_like(self.grating)
+        mask2 = torch.zeros_like(self.grating)
 
         for i in range(20):
             for j in range(20):
                 d = np.sqrt((x0 - i) ** 2 + (y0 - j) ** 2)
                 if d <= r:
-                    mask[:, i, j] = 1
+                    mask1[:, i, j] = 1
+
+        for i in range(20):
+            for j in range(20):
+                d = np.sqrt((x0 - i) ** 2 + (y0 - j) ** 2)
+                if d <= r+1.1:
+                    mask2[:, i, j] = 1
 
         if not moving_background:
-            return mask * self.grating
+            return mask1 * self.grating + (1-mask2) * self.grating#, Nicol
         else:
-            return mask * self.grating + (1-mask) * self.grating2
+            return mask1 * self.grating + (1-mask2) * self.grating2
 
-    def _get_current(self, model, unit_idx, grating, n_trials=8):
+    def _get_current(self, model, unit_idx, grating, n_trials=8, ablate_recurrence=False):
         warmup_period = 10
 
         with torch.no_grad():
-            output, spikes, mem, abs_rec, input_current = model(grating.unsqueeze(0).unsqueeze(0).repeat(n_trials, 1, 1, 1, 1).cuda(), mode="val")
+            output, spikes, mem, abs_rec, input_current = model(grating.unsqueeze(0).unsqueeze(0).repeat(n_trials, 1, 1, 1, 1).cuda(), mode="val",ablate_recurrence=ablate_recurrence)
             abs_rec = abs_rec[:, unit_idx, warmup_period:].cpu()
             input_current = input_current[:, unit_idx, warmup_period:, 0, 0].cpu()
 
