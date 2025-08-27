@@ -59,6 +59,9 @@ class RetinaModel(devtorch.DevModel):
         if mode == "just_spikes":
             # This will return spikes over all spatial locations
             return self._neurons(input_current[:, :, :], mode, ablate_recurrence)[0]
+        elif mode == "just_input_current":#Nicol
+
+            return input_current#Nicol
 
         neuron_outputs = self._neurons(input_current[:, :, :, 0, 0], mode, ablate_recurrence)
         spikes = neuron_outputs[0]
