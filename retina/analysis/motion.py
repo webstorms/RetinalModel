@@ -156,13 +156,13 @@ class TextureMotion:
 
 class DifferentialMotion:
 
-    def __init__(self, model, unit_idx, theta, spatial_freq, temporal_freq, y0, x0, r, lum=1, moving_background=False, ablate_recurrence=False):
+    def __init__(self, model, unit_idx, theta, spatial_freq, temporal_freq, y0, x0, r, lum=1, probe_ms=200000, moving_background=False, ablate_recurrence=False):
         #print("making grating")
-        self.grating = self._jittered_grating(theta, spatial_freq, temporal_freq, lum)
+        self.grating = self._jittered_grating(theta, spatial_freq, temporal_freq, lum, probe_ms)
         #self.grating = self.grating * lum
         #self.grating_shift = self.grating_shift * lum
         #print("making grating 2")
-        self.grating2 = self._jittered_grating(theta, spatial_freq, temporal_freq, lum) #was spatial_freq*1.5 and 1.*temporal_freq
+        self.grating2 = self._jittered_grating(theta, spatial_freq, temporal_freq, lum, probe_ms) #was spatial_freq*1.5 and 1.*temporal_freq
         #self.grating2 = self.grating2 * lum
         self.masked_grating_local = self._mask_grating(y0, x0, r, moving_background=True)
         self.masked_grating_global = self._mask_grating(y0, x0, r, moving_background=False)
@@ -180,18 +180,18 @@ class DifferentialMotion:
     def local_raster(self):
         return self.local_raster_x, self.local_raster_y
 
-    def _generate_grating(self, theta, spatial_freq, temporal_freq):
-        probe_ms = 3000
+    def _generate_grating(self, theta, spatial_freq, temporal_freq, probe_ms=200000):
+        probe_ms = probe_ms
         dt = 1000 / 240
         warmup_period = 10
 
         return tuning.GratingsProber.generate_grating(1, 20, 20, theta, spatial_freq, temporal_freq, duration=probe_ms+warmup_period*dt, dt=dt)
 
-    def _jittered_grating(self,theta, spatial_freq, temporal_freq, lum):
+    def _jittered_grating(self,theta, spatial_freq, temporal_freq, lum, probe_ms=200000):
         amplitude = lum
         rf_w = 20
         rf_h = 20
-        probe_ms = 50000
+        probe_ms = probe_ms # was 50000
         dt = 1000 / 240
         warmup_period = 10
         duration = probe_ms + warmup_period * dt

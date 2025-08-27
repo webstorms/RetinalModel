@@ -55,7 +55,6 @@ class AnticipationAnalysis:
 
     def __init__(self, model, bar_width, bar_x0, luminance=0, n_repeats=20, ablate_recurrence=False, bar_speed=37, smooth=False):
         # bar_x0 is left edge starting position
-        print("hello")
 
         self.consume_length = 29  # number of frames consumed by model to produce single output frame
         self.pad = 100  # pad extra frames to beginning of clips
