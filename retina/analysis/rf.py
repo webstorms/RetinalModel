@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
-import brainbox.rfs as rfs
+import brainbox.rfs as rfs#brainbox.physiology.rfs
 from brainbox.rfs.gaussian import fit, query
 
 
@@ -16,9 +16,10 @@ class RFQuery:
     MIDGET_Y = 1.5
     MIDGET_X = 0.1
 
-    def __init__(self, root, model, min_cc=0.7, min_env=0.5):
-        self.og_strfs = self._build_strfs(model)
-        self.rfs = self._get_all_highest_power_spatial_rf(self.og_strfs)
+    def __init__(self, root, model, min_cc=0.7, min_env=0.5, t_len=100, samples=200):
+        self.og_strfs = self._build_strfs(model, t_len=t_len, samples=samples)
+        self.rfs, self.ts_at_max = self._get_all_highest_power_spatial_rf(self.og_strfs)
+        self.mean_rfs = self._get_all_mean_spatial_rf(self.og_strfs)
 
         if not os.path.exists(f"{root}/data/rf/gaus.csv"):
             fit.GaussianFitter().fit_spatial(f"{root}/data/rf/gaus.csv", self.rfs, 200, n_spatial_iterations=4000, spatial_lr=1e-1)
@@ -30,15 +31,11 @@ class RFQuery:
         self.params_df["index"] = list(range(len(self.params_df)))
         self.params_df = self.params_df.reset_index()
         self.params_df = self.params_df.set_index("index")
-        try:
-            # This throws an exception for the encoding model as it lacks parasol-like units
-            self.params_df["first_pc"], self.params_df["type"] = self._get_cell_type()
-        except:
-            pass
+        self.params_df["first_pc"], self.params_df["type"] = self._get_cell_type()
         self.params_df = self.params_df.rename(columns={"level_0": "og_index"})
 
     def _build_strfs(self, model, rf_len=36, t_len=100, noise_var=10, samples=200, batch_size=50, rf_h=20, rf_w=20, device="cuda", **kwargs):
-
+ #t_len=200,samples=1000000, batch_size=50
         def model_output(noise):
             with torch.no_grad():
                 return model(noise.unsqueeze(1), mode="val", **kwargs)[1]
@@ -51,14 +48,33 @@ class RFQuery:
         t = power_at_timesteps.argmax().item()
         spatial_rf = spatiotemporal_rf[t]
 
-        return spatial_rf
+        return spatial_rf, t
 
     def _get_all_highest_power_spatial_rf(self, spatiotemporal_rfs):
         # spatiotemporal_rfs: n_units, rf_len, rf_shape, rf_shape
         rfs = []
+        ts_at_max = []
 
         for i in range(len(spatiotemporal_rfs)):
-            spatial_rf = self._get_highest_power_spatial_rf(spatiotemporal_rfs[i].detach().cpu().float())
+            spatial_rf, t_at_max = self._get_highest_power_spatial_rf(spatiotemporal_rfs[i].detach().cpu().float())
+            rfs.append(spatial_rf)
+            ts_at_max.append(t_at_max)
+        rfs = torch.stack(rfs)
+
+        return rfs, ts_at_max
+
+    def _get_mean_spatial_rf(self, spatiotemporal_rf):
+        # spatiotemporal_rf: (rf_len, height, width)
+        spatial_rf = spatiotemporal_rf[-24:].mean(dim=0)
+        #spatial_rf = spatiotemporal_rf.mean(dim=0)
+        return spatial_rf
+
+    def _get_all_mean_spatial_rf(self, spatiotemporal_rfs):
+        # spatiotemporal_rfs: n_units, rf_len, rf_shape, rf_shape
+        rfs = []
+
+        for i in range(len(spatiotemporal_rfs)):
+            spatial_rf = self._get_mean_spatial_rf(spatiotemporal_rfs[i].detach().cpu().float())
             rfs.append(spatial_rf)
         rfs = torch.stack(rfs)
 
@@ -67,21 +83,33 @@ class RFQuery:
     def _get_cell_type(self):
         # Get first PC from rf temporal profile
         temp_profiles = self.strfs.mean((2, 3))
-        first_pc = PCA(n_components=1).fit_transform(temp_profiles)[:, 0]
 
-        # K-mean clustering
-        data = [(x, y) for x, y in zip(first_pc, self.params_df["size"])]
-        kmeans = KMeans(n_clusters=4, n_init=1, max_iter=1, random_state=42)
-        kmeans.fit(data)
-        init_centres = np.array([
-            [-RFQuery.PARASOL_X, RFQuery.PARASOL_Y],
-            [RFQuery.PARASOL_X, RFQuery.PARASOL_Y],
-            [-RFQuery.MIDGET_X, RFQuery.MIDGET_Y],
-            [RFQuery.MIDGET_X, RFQuery.MIDGET_Y]]).astype(np.float64)
-        kmeans.cluster_centers_ = init_centres  # Hard code those centroids
-        cell_type = kmeans.predict(data)
+        if temp_profiles.shape[0] == 0:
+            # Return nulls if there are no STRFs
+            return np.array([]), np.array([])
 
-        return first_pc, cell_type
+        try:
+            first_pc = PCA(n_components=1).fit_transform(temp_profiles)[:, 0]
+
+            # K-mean clustering
+            data = [(x, y) for x, y in zip(first_pc, self.params_df["size"])]
+            kmeans = KMeans(n_clusters=4, n_init=1, max_iter=1, random_state=42)
+            kmeans.fit(data)
+            init_centres = np.array([
+                [-RFQuery.PARASOL_X, RFQuery.PARASOL_Y],
+                [RFQuery.PARASOL_X, RFQuery.PARASOL_Y],
+                [-RFQuery.MIDGET_X, RFQuery.MIDGET_Y],
+                [RFQuery.MIDGET_X, RFQuery.MIDGET_Y]
+            ]).astype(np.float64)
+            kmeans.cluster_centers_ = init_centres  # Hard code those centroids
+            cell_type = kmeans.predict(data)
+
+            return first_pc, cell_type
+
+        except ValueError as e:
+            # If PCA fails, fallback to null values
+            print(f"Skipping PCA and cell type classification due to error: {e}")
+            return np.array([]), np.array([])
 
 
 class FlashQuery:

@@ -21,7 +21,7 @@ def get_larva_sequence(root, begin_pad=29, end_pad=10, n_frames=36, lum=0.5):
         return frames_tensor
 
     def get_larva_image(root):
-        img = plt.imread(f"{root}/data/figures/proc_larva.png")
+        img = plt.imread(f"{root}/data/latency/proc_larva2.png")
         r, g, b = img[:, :, 0], img[:, :, 1], img[:, :, 2]
         img = 0.2989 * r + 0.5870 * g + 0.1140 * b
         img *= 255
@@ -97,14 +97,14 @@ class NoiseReconstructionDatasetBuilder:
 
         return noise_tensor[:, 0]
 
-    def _get_and_cache_neural_responses(self, x_clip_noise):
+    def _get_and_cache_neural_responses(self, x_clip_noise, ablate_recurrence=False,ablate_cell_types=-1):
         stim_response_list = []
 
         for i in range(x_clip_noise.shape[0]):
             with torch.no_grad():
                 clip = x_clip_noise[i].unsqueeze(0).unsqueeze(0).cuda()
                 clip = F.pad(clip, (0, 0, 0, 0, 29, 0))
-                spikes = self._model(clip, mode="just_spikes", stride=4)
+                spikes = self._model(clip, mode="just_spikes", stride=4, ablate_recurrence=ablate_recurrence)#ablate_cell_types
                 stim_response_list.append(spikes.cpu())
 
         return torch.cat(stim_response_list)
