@@ -39,7 +39,7 @@ We recorded various natural movies for model training. The dataset can be downlo
 All the figures in the paper can be reproduced using the notebooks found in the ```notebooks``` directory.
 
 ### Reconstructing images from spike rates and latencies
-To build the noisy datasets run the ```scripts/recon/build_noise_dataset.py``` script. Finally, launch the ```scripts/recon/fit_noise_dataset.py``` script to fit the readouts for reconstructing the input images using the rate and latency spike codes.
+To build the noisy datasets run the ```scripts/recon/build_noise_datasets.py``` script. Finally, launch the ```scripts/recon/fit_noise_datasets.py``` script to fit the readouts for reconstructing the input images using the rate and latency spike codes.
 
 ### Downloading retina response datasets
 All instructions for downloading and processing the retinal recordings can be found in the ```data/neural``` directory.
