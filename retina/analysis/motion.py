@@ -10,21 +10,20 @@ from brainbox.transforms import GaussianKernel
 
 class GratingQuery:
 
-    def __init__(self, root, model, ablate_recurrence=False):#Nicol
+    def __init__(self, root, model, ablate_recurrence=False):
         self._root = root
         self._model = model
-        self._ablate_recurrence = ablate_recurrence#Nicol
 
-        if not os.path.exists(f"{self.tuning_path}/probe.csv"):
-            self.probe(ablate_recurrence=ablate_recurrence)
+        if not os.path.exists(f"{self.get_tuning_path(ablate_recurrence)}/probe.csv"):
+            self.probe(ablate_recurrence=False)
+            self.probe(ablate_recurrence=True)
 
-        self.query = tuning.TuningQuery(self.tuning_path)
+        self.query = tuning.TuningQuery(self.get_tuning_path(ablate_recurrence))
         self.all_tuning_results = self.query.validate(response_threshold=0.0, fit_threshold=-1)
         self.filtered_tuning_results = self.query.validate(response_threshold=0.01, fit_threshold=-1)
 
-    @property
-    def tuning_path(self):
-        return f"{self._root}/data/tuning"
+    def get_tuning_path(self, ablate_recurrence):
+        return f"{self._root}/data/tuning/rec_ablate_{ablate_recurrence}"
 
     def probe(self, n_trials=8, ablate_recurrence=False):
         torch.manual_seed(42)
@@ -41,7 +40,7 @@ class GratingQuery:
 
                 b, _, _, _, _ = data.shape
                 data = data.repeat(n_trials, 1, 1, 1, 1)
-                spike_trains = self._model(data, mode="just_spikes", ablate_recurrence=self._ablate_recurrence)[..., 0, 0]#Nicol
+                spike_trains = self._model(data, mode="just_spikes", ablate_recurrence=ablate_recurrence)[..., 0, 0]#Nicol
                 _, n, t = spike_trains.shape
                 spike_trains = spike_trains.view(n_trials, b, n, t)
                 spike_trains = spike_trains.mean(0)
@@ -57,7 +56,7 @@ class GratingQuery:
         temporal_freqs = [1, 2, 4, 8]
 
         gratings = tuning.GratingsProber(input_to_spikes, amplitude=1, rf_w=20, rf_h=20, duration=probe_ms+warmup_period*dt, dt=dt, thetas=thetas, spatial_freqs=spatial_freqs, temporal_freqs=temporal_freqs)
-        gratings.probe_and_fit(self.tuning_path, probe_batch=128, response_batch=32)
+        gratings.probe_and_fit(self.get_tuning_path(ablate_recurrence), probe_batch=128, response_batch=32)
 
 
 class TextureMotion:
