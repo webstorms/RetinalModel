@@ -6,7 +6,7 @@ root = os.path.expanduser("~/PycharmProjects/RetinalModel")
 
 
 def fit_model(noise, code):
-    train_dataset = analysis.NoiseReconstructionDataset(root, pred_offset=0, istrain=True, noise=noise, length=72, noise_target=False, code=code)
+    train_dataset = analysis.NoiseReconstructionDataset(root, pred_offset=128, istrain=True, noise=noise, length=72, noise_target=False, code=code)
     ln = analysis.LN()
     name = f"{noise}_{code}"
     cross_root = f"{root}/recon/{name}"
