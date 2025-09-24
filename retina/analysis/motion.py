@@ -57,7 +57,7 @@ class GratingQuery:
         temporal_freqs = [1, 2, 4, 8]
 
         gratings = tuning.GratingsProber(input_to_spikes, amplitude=1, rf_w=20, rf_h=20, duration=probe_ms+warmup_period*dt, dt=dt, thetas=thetas, spatial_freqs=spatial_freqs, temporal_freqs=temporal_freqs)
-        gratings.probe_and_fit(self.tuning_path, probe_batch=256, response_batch=32)
+        gratings.probe_and_fit(self.tuning_path, probe_batch=128, response_batch=32)
 
 
 class TextureMotion:
