@@ -40,7 +40,7 @@ class GratingQuery:
 
                 b, _, _, _, _ = data.shape
                 data = data.repeat(n_trials, 1, 1, 1, 1)
-                spike_trains = self._model(data, mode="just_spikes", ablate_recurrence=ablate_recurrence)[..., 0, 0]#Nicol
+                spike_trains = self._model(data, mode="just_spikes", ablate_recurrence=ablate_recurrence)[..., 0, 0]
                 _, n, t = spike_trains.shape
                 spike_trains = spike_trains.view(n_trials, b, n, t)
                 spike_trains = spike_trains.mean(0)
@@ -112,8 +112,7 @@ class TextureMotion:
         return tuning.GratingsProber.generate_grating(1, 20, 20, theta, sf, tf, duration=probe_ms + warmup_period * dt, dt=dt)
 
     @staticmethod
-    def get_raster(model, unit_idx, grating, n_trials=8,ablate_recurrence=False):
-        #print(ablate_recurrence)
+    def get_raster(model, unit_idx, grating, n_trials=8, ablate_recurrence=False):
         warmup_period = 10
 
         with torch.no_grad():

@@ -22,7 +22,7 @@ def build_and_save_reconstruction_dataset(istrain=True, noise=0):
     torch.save(builder.x_frame, f"{output_path}/{istrain}_x_frame.pt")
     torch.save(builder.noise_frame, f"{output_path}/{istrain}_noise_frame.pt")
     torch.save(builder.x_frame_noise, f"{output_path}/{istrain}_x_frame_noise.pt")
-    # torch.save(builder.rate_code, f"{output_path}/{istrain}_rate_code.pt")
+    torch.save(builder.rate_code, f"{output_path}/{istrain}_rate_code.pt")
     torch.save(builder.latency_code, f"{output_path}/{istrain}_latency_code.pt")
 
 
