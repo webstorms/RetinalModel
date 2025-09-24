@@ -4,7 +4,11 @@
 # Python
 __pycache__/
 *.pyc
-src.egg-info
+*.egg-info
+data/neural
+
+# Results
+results
 
 # PyCharm
 .idea
