@@ -151,8 +151,59 @@ class TextureMotion:
 
         return df[q].shape[0]
 
-
 class DifferentialMotion:
+
+    def __init__(self, model, unit_idx, theta, spatial_freq, temporal_freq, y0, x0, r, lum=1, moving_background=False):
+        self.grating = self._generate_grating(theta, spatial_freq, temporal_freq) * lum
+        self.grating2 = self._generate_grating(np.pi-theta, spatial_freq*1.5, temporal_freq) * lum
+        self.masked_grating = self._mask_grating(y0, x0, r, moving_background)
+        self.global_raster_x, self.global_raster_y = TextureMotion.spike_tensor_to_points(TextureMotion.get_raster(model, unit_idx, self.grating))
+        self.local_raster_x, self.local_raster_y = TextureMotion.spike_tensor_to_points(TextureMotion.get_raster(model, unit_idx, self.masked_grating))
+
+        self.global_fwd_current, self.global_rec_current = self._get_current(model, unit_idx, self.grating, n_trials=8)
+        self.local_fwd_current, self.local_rec_current = self._get_current(model, unit_idx, self.masked_grating, n_trials=8)
+
+    @property
+    def global_raster(self):
+        return self.global_raster_x, self.global_raster_y
+
+    @property
+    def local_raster(self):
+        return self.local_raster_x, self.local_raster_y
+
+    def _generate_grating(self, theta, spatial_freq, temporal_freq):
+        probe_ms = 3000
+        dt = 1000 / 240
+        warmup_period = 10
+
+        return tuning.GratingsProber.generate_grating(1, 20, 20, theta, spatial_freq, temporal_freq, duration=probe_ms+warmup_period*dt, dt=dt)
+
+    def _mask_grating(self, x0, y0, r, moving_background):
+        mask = torch.zeros_like(self.grating)
+
+        for i in range(20):
+            for j in range(20):
+                d = np.sqrt((x0 - i) ** 2 + (y0 - j) ** 2)
+                if d <= r:
+                    mask[:, i, j] = 1
+
+        if not moving_background:
+            return mask * self.grating
+        else:
+            return mask * self.grating + (1-mask) * self.grating2
+
+    def _get_current(self, model, unit_idx, grating, n_trials=8):
+        warmup_period = 10
+
+        with torch.no_grad():
+            output, spikes, mem, abs_rec, input_current = model(grating.unsqueeze(0).unsqueeze(0).repeat(n_trials, 1, 1, 1, 1).cuda(), mode="val")
+            abs_rec = abs_rec[:, unit_idx, warmup_period:].cpu()
+            input_current = input_current[:, unit_idx, warmup_period:, 0, 0].cpu()
+
+        return abs_rec, input_current
+
+
+class JitteredDifferentialMotion:
 
     def __init__(self, model, unit_idx, theta, spatial_freq, temporal_freq, y0, x0, r, lum=1, probe_ms=200000, moving_background=False, ablate_recurrence=False):
         #print("making grating")
