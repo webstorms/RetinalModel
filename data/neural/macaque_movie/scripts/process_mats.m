@@ -12,5 +12,5 @@ for i = 1:length(files)
     data = struct(dataset);
     
     % Save processed data
-    save(fullfile(processed_path, file_name), 'data');
+    save(fullfile(processed_path, file_name), 'data.dataset');
 end

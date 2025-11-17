@@ -6,10 +6,10 @@ root = os.path.expanduser("~/PycharmProjects/RetinalModel")
 
 
 def fit_model(noise, code):
-    train_dataset = analysis.NoiseReconstructionDataset(root, pred_offset=0, istrain=True, noise=noise, length=72, noise_target=False, code=code)
+    train_dataset = analysis.NoiseReconstructionDataset(root, pred_offset=128, istrain=True, noise=noise, length=72, noise_target=False, code=code)
     ln = analysis.LN()
     name = f"{noise}_{code}"
-    cross_root = f"{root}/recon/{name}"
+    cross_root = f"{root}/data/recon/{name}"
     cross_val = analysis.CrossValidationLNTrainer(cross_root, ln, train_dataset, n_epochs=200, batch_size=32, lr=10**-5, k=5)
     cross_val.train()
 

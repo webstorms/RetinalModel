@@ -4,7 +4,13 @@
 # Python
 __pycache__/
 *.pyc
-src.egg-info
+*.egg-info
+data/neural
+data/rf
+data/recon
+
+# Results
+results
 
 # PyCharm
 .idea
@@ -14,3 +20,8 @@ src.egg-info
 
 # Jupyter Notebook
 .ipynb_checkpoints
+
+# Ignore large model/data files that exceed GitHub's 100MB limit
+data/tuning/gratings.pt
+data/tuning/rec_ablate_False/gratings.pt
+data/tuning/rec_ablate_True/gratings.pt

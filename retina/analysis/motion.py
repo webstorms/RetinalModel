@@ -10,21 +10,20 @@ from brainbox.transforms import GaussianKernel
 
 class GratingQuery:
 
-    def __init__(self, root, model, ablate_recurrence=False):#Nicol
+    def __init__(self, root, model, ablate_recurrence=False):
         self._root = root
         self._model = model
-        self._ablate_recurrence = ablate_recurrence#Nicol
 
-        if not os.path.exists(f"{self.tuning_path}/probe.csv"):
-            self.probe(ablate_recurrence=ablate_recurrence)
+        if not os.path.exists(f"{self.get_tuning_path(ablate_recurrence)}/probe.csv"):
+            self.probe(ablate_recurrence=False)
+            self.probe(ablate_recurrence=True)
 
-        self.query = tuning.TuningQuery(self.tuning_path)
+        self.query = tuning.TuningQuery(self.get_tuning_path(ablate_recurrence))
         self.all_tuning_results = self.query.validate(response_threshold=0.0, fit_threshold=-1)
         self.filtered_tuning_results = self.query.validate(response_threshold=0.01, fit_threshold=-1)
 
-    @property
-    def tuning_path(self):
-        return f"{self._root}/data/tuning"
+    def get_tuning_path(self, ablate_recurrence):
+        return f"{self._root}/data/tuning/rec_ablate_{ablate_recurrence}"
 
     def probe(self, n_trials=8, ablate_recurrence=False):
         torch.manual_seed(42)
@@ -41,7 +40,7 @@ class GratingQuery:
 
                 b, _, _, _, _ = data.shape
                 data = data.repeat(n_trials, 1, 1, 1, 1)
-                spike_trains = self._model(data, mode="just_spikes", ablate_recurrence=self._ablate_recurrence)[..., 0, 0]#Nicol
+                spike_trains = self._model(data, mode="just_spikes", ablate_recurrence=ablate_recurrence)[..., 0, 0]
                 _, n, t = spike_trains.shape
                 spike_trains = spike_trains.view(n_trials, b, n, t)
                 spike_trains = spike_trains.mean(0)
@@ -57,7 +56,7 @@ class GratingQuery:
         temporal_freqs = [1, 2, 4, 8]
 
         gratings = tuning.GratingsProber(input_to_spikes, amplitude=1, rf_w=20, rf_h=20, duration=probe_ms+warmup_period*dt, dt=dt, thetas=thetas, spatial_freqs=spatial_freqs, temporal_freqs=temporal_freqs)
-        gratings.probe_and_fit(self.tuning_path, probe_batch=256, response_batch=32)
+        gratings.probe_and_fit(self.get_tuning_path(ablate_recurrence), probe_batch=128, response_batch=32)
 
 
 class TextureMotion:
@@ -113,8 +112,7 @@ class TextureMotion:
         return tuning.GratingsProber.generate_grating(1, 20, 20, theta, sf, tf, duration=probe_ms + warmup_period * dt, dt=dt)
 
     @staticmethod
-    def get_raster(model, unit_idx, grating, n_trials=8,ablate_recurrence=False):
-        #print(ablate_recurrence)
+    def get_raster(model, unit_idx, grating, n_trials=8, ablate_recurrence=False):
         warmup_period = 10
 
         with torch.no_grad():
@@ -153,8 +151,59 @@ class TextureMotion:
 
         return df[q].shape[0]
 
-
 class DifferentialMotion:
+
+    def __init__(self, model, unit_idx, theta, spatial_freq, temporal_freq, y0, x0, r, lum=1, moving_background=False):
+        self.grating = self._generate_grating(theta, spatial_freq, temporal_freq) * lum
+        self.grating2 = self._generate_grating(np.pi-theta, spatial_freq*1.5, temporal_freq) * lum
+        self.masked_grating = self._mask_grating(y0, x0, r, moving_background)
+        self.global_raster_x, self.global_raster_y = TextureMotion.spike_tensor_to_points(TextureMotion.get_raster(model, unit_idx, self.grating))
+        self.local_raster_x, self.local_raster_y = TextureMotion.spike_tensor_to_points(TextureMotion.get_raster(model, unit_idx, self.masked_grating))
+
+        self.global_fwd_current, self.global_rec_current = self._get_current(model, unit_idx, self.grating, n_trials=8)
+        self.local_fwd_current, self.local_rec_current = self._get_current(model, unit_idx, self.masked_grating, n_trials=8)
+
+    @property
+    def global_raster(self):
+        return self.global_raster_x, self.global_raster_y
+
+    @property
+    def local_raster(self):
+        return self.local_raster_x, self.local_raster_y
+
+    def _generate_grating(self, theta, spatial_freq, temporal_freq):
+        probe_ms = 3000
+        dt = 1000 / 240
+        warmup_period = 10
+
+        return tuning.GratingsProber.generate_grating(1, 20, 20, theta, spatial_freq, temporal_freq, duration=probe_ms+warmup_period*dt, dt=dt)
+
+    def _mask_grating(self, x0, y0, r, moving_background):
+        mask = torch.zeros_like(self.grating)
+
+        for i in range(20):
+            for j in range(20):
+                d = np.sqrt((x0 - i) ** 2 + (y0 - j) ** 2)
+                if d <= r:
+                    mask[:, i, j] = 1
+
+        if not moving_background:
+            return mask * self.grating
+        else:
+            return mask * self.grating + (1-mask) * self.grating2
+
+    def _get_current(self, model, unit_idx, grating, n_trials=8):
+        warmup_period = 10
+
+        with torch.no_grad():
+            output, spikes, mem, abs_rec, input_current = model(grating.unsqueeze(0).unsqueeze(0).repeat(n_trials, 1, 1, 1, 1).cuda(), mode="val")
+            abs_rec = abs_rec[:, unit_idx, warmup_period:].cpu()
+            input_current = input_current[:, unit_idx, warmup_period:, 0, 0].cpu()
+
+        return abs_rec, input_current
+
+
+class JitteredDifferentialMotion:
 
     def __init__(self, model, unit_idx, theta, spatial_freq, temporal_freq, y0, x0, r, lum=1, probe_ms=200000, moving_background=False, ablate_recurrence=False):
         #print("making grating")
