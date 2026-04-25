@@ -1,3 +1,5 @@
+import gc
+
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -14,17 +16,26 @@ class AllDatasetSpikeStats:
 
     def __init__(self, root):
         self.sal_img_stats = DatasetSpikeStats(root, istrain=False, dataset_name="SalamanderImage", spatial_scale=0.1171875, max_dim=30.0, get_model_responses=True)
+        torch.cuda.empty_cache()
         self.macaque_img_stats = DatasetSpikeStats(root, istrain=False, dataset_name="MacaqueImage", spatial_scale=0.19634, max_dim=20.0, get_model_responses=True)
+        torch.cuda.empty_cache()
         self.macaque_movie_stats = DatasetSpikeStats(root, istrain=False, dataset_name="MacaqueMovie", spatial_scale=0.19634, max_dim=20.0, get_model_responses=False)
         self.marmoset_movie_stats = DatasetSpikeStats(root, istrain=False, dataset_name="MarmosetMovie", spatial_scale=0.4, max_dim=80.0, get_model_responses=False)
         self.mouse_movie_stats = DatasetSpikeStats(root, istrain=False, dataset_name="MouseMovie", spatial_scale=0.4, max_dim=80.0, get_model_responses=True)
+        torch.cuda.empty_cache()
 
         self.model_img_stats = ModelDatasetSpikeStats(root, min_cv_spikes=3, pred_offset=128, repeats=5, img=True)
+        torch.cuda.empty_cache()
         self.model_movie_stats = ModelDatasetSpikeStats(root, min_cv_spikes=3, pred_offset=128, repeats=5, img=False)
+        torch.cuda.empty_cache()
         self.norec_model_img_stats = ModelDatasetSpikeStats(root, min_cv_spikes=3, pred_offset=128, repeats=5, img=True, ablate_recurrence=True)
+        torch.cuda.empty_cache()
         self.norec_model_movie_stats = ModelDatasetSpikeStats(root, min_cv_spikes=3, pred_offset=128, repeats=5, img=False, ablate_recurrence=True)
+        torch.cuda.empty_cache()
         self.compression_model_img_stats = ModelDatasetSpikeStats(root, min_cv_spikes=3, pred_offset=0, repeats=5, img=True)
+        torch.cuda.empty_cache()
         self.compression_model_movie_stats = ModelDatasetSpikeStats(root, min_cv_spikes=3, pred_offset=0, repeats=5, img=False)
+        torch.cuda.empty_cache()
 
     def get_spike_rate_df(self, img=False):
         return self._build_metric_comparison_df("spike_rate", img)
@@ -166,19 +177,23 @@ class DatasetSpikeStats:
 
     def __init__(self, root, istrain, dataset_name, spatial_scale, max_dim, min_cv_spikes=3, pred_offset=128, repeats=5, luminance=1.0, get_model_responses=False):
         dataset = loader.load(root, istrain, dataset_name, spatial_scale, max_dim, luminance=luminance, cell_idx=None)
-        self.dataset = dataset
         self.x = dataset._transformed_x.unsqueeze(1)
         self.spike_tensor = dataset._transformed_y
+        del dataset
+        gc.collect()
         self.exp_stats = SpikeStats(self.spike_tensor, min_cv_spikes)
 
         if get_model_responses:
             prediction_model = train.Trainer.load_model(f"{root}/results", f"0.0031622776601683794_*_0.01_0.6_{pred_offset}_8")
             pred_model_spikes = DatasetSpikeStats.get_raster(prediction_model, self.x, repeats)
+            del prediction_model
             self.unperm_pred_model_spikes = pred_model_spikes
             self.pred_model_spikes = pred_model_spikes.permute(0, 3, 1, 2, 4, 5).flatten(3, 5)
             offset = self.spike_tensor.shape[1] - self.pred_model_spikes.shape[1]
             self.spike_tensor = self.spike_tensor[:, offset:]
             self.pred_model_stats = SpikeStats(self.pred_model_spikes, min_cv_spikes)
+            gc.collect()
+            torch.cuda.empty_cache()
 
     def get_exp_spike_times(self):
         return DatasetSpikeStats.spike_tensor_to_points(self.spike_tensor[:, :, 0].flatten(0, 1).T)
@@ -205,13 +220,13 @@ class DatasetSpikeStats:
             for _ in range(n_trials):
                 with torch.no_grad():
                     spikes = model(clips[i:i+1].cuda(), mode="just_spikes", stride=4, ablate_recurrence=ablate_recurrence)
-                    trial_unit_raster_list.append(spikes)
+                    trial_unit_raster_list.append(spikes.detach().cpu())
+                    del spikes
 
-            spikes = torch.cat(trial_unit_raster_list)
-            unit_raster_list.append(spikes)
-            spikes = torch.stack(unit_raster_list)
+            unit_raster_list.append(torch.cat(trial_unit_raster_list))
 
-        return spikes.detach().cpu()
+        torch.cuda.empty_cache()
+        return torch.stack(unit_raster_list)
 
     @staticmethod
     def spike_tensor_to_points(spike_tensor):
@@ -256,13 +271,18 @@ class SpikeStats:
 
     def get_synchronization(self, pairs=1000, seed=0, bin_dt=33, from_idxs=None, to_idxs=None):
         torch.manual_seed(seed)
+        dt = 4
         reshaped_spikes = self.spike_tensor[:, :, 0, :].permute(0, 2, 1)
-        cross_covariance_tensor = spiking_phys.compute_synchronization(reshaped_spikes, pairs, dt=4, bin_dt=bin_dt, normalize=False, from_idxs=from_idxs, to_idxs=to_idxs)
+        cross_covariance_tensor = spiking_phys.compute_synchronization(reshaped_spikes, pairs, dt=dt, bin_dt=bin_dt, normalize=False, from_idxs=from_idxs, to_idxs=to_idxs)
         synchronization_df = spiking_phys.compute_synchronization_df(cross_covariance_tensor.mean(0), dt=bin_dt)
 
         mean_synchronization = synchronization_df.groupby("lag").mean()
         lag = mean_synchronization.index / 1000
-        correlation = mean_synchronization["correlation"].values
+        # brainbox >=0.0.9 normalizes the binning kernel in bin_spikes (kernel /= kernel.sum()),
+        # which scales the unnormalized cross-covariance by 1/(bin_dt/dt)**2. Compensate to
+        # reproduce the paper's published values, which were generated against the older binning.
+        kernel_length = bin_dt / dt
+        correlation = mean_synchronization["correlation"].values * (kernel_length ** 2)
 
         return lag.values, correlation
 
