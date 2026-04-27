@@ -42,7 +42,7 @@ All the figures in the paper can be reproduced using the notebooks found in the 
 To build the noisy datasets run the ```scripts/recon/build_noise_datasets.py``` script. Finally, launch the ```scripts/recon/fit_noise_datasets.py``` script to fit the readouts for reconstructing the input images using the rate and latency spike codes.
 
 ### Downloading retina response datasets
-All instructions for downloading and processing the retinal recordings can be found in the ```data/neural``` directory.
+All instructions for downloading and processing the retinal recordings can be found in the ```data/neural``` directory. Since several of the original dataset download links are no longer functional, a zipped snapshot of the pre-processed `data/neural/` directory is also available as an asset under this repository's [releases](https://github.com/webstorms/RetinalModel/releases) for reproducibility.
 
 ### Predicting retinal responses from the spiking models
 The script to launch each cross-validated retinal dataset fit can be found in the ```scripts/fits/build_and_fit``` directory. Scripts for determining the best performing spatial scale for each dataset are found in the ```scripts/fits/search``` directory.
