@@ -159,8 +159,19 @@ class ModelDatasetSpikeStats:
 
         prediction_model = train.Trainer.load_model(f"{root}/results", f"0.0031622776601683794_*_0.01_0.6_{pred_offset}_8")
         pred_model_spikes = DatasetSpikeStats.get_raster(prediction_model, self.x, repeats, ablate_recurrence)
-        self.pred_model_spikes = pred_model_spikes.permute(0, 3, 1, 2, 4, 5).flatten(3, 5)
-        self.exp_stats = SpikeStats(self.pred_model_spikes, min_cv_spikes)
+        tmp = pred_model_spikes.permute(0, 3, 1, 2, 4, 5)
+
+        H, W = tmp.shape[-2], tmp.shape[-1]
+
+        self.pred_model_spikes = tmp.flatten(3, 5)
+
+        self.exp_stats = SpikeStats(
+            self.pred_model_spikes,
+            min_cv_spikes,
+            has_spatial=True,
+            n_spatial=H * W,
+            spatial_mode="nanmean"
+        )
 
     @property
     def n_unresponsive_units(self):
@@ -188,10 +199,22 @@ class DatasetSpikeStats:
             pred_model_spikes = DatasetSpikeStats.get_raster(prediction_model, self.x, repeats)
             del prediction_model
             self.unperm_pred_model_spikes = pred_model_spikes
-            self.pred_model_spikes = pred_model_spikes.permute(0, 3, 1, 2, 4, 5).flatten(3, 5)
+            tmp = pred_model_spikes.permute(0, 3, 1, 2, 4, 5)
+
+            H, W = tmp.shape[-2], tmp.shape[-1]
+
+            self.pred_model_spikes = tmp.flatten(3, 5)
+
             offset = self.spike_tensor.shape[1] - self.pred_model_spikes.shape[1]
             self.spike_tensor = self.spike_tensor[:, offset:]
-            self.pred_model_stats = SpikeStats(self.pred_model_spikes, min_cv_spikes)
+
+            self.pred_model_stats = SpikeStats(
+                self.pred_model_spikes,
+                min_cv_spikes,
+                has_spatial=True,
+                n_spatial=H * W,
+                spatial_mode="nanmean"
+            )
             gc.collect()
             torch.cuda.empty_cache()
 
@@ -238,10 +261,13 @@ class DatasetSpikeStats:
 
 class SpikeStats:
 
-    def __init__(self, spike_tensor, min_cv_spikes=3):
+    def __init__(self, spike_tensor, min_cv_spikes=3, has_spatial=False, n_spatial=1, spatial_mode="nanmean"):
         self.spike_tensor = spike_tensor
         self.duration = (self.spike_tensor.shape[1] / 240) * 1000
         self.min_cv_spikes = min_cv_spikes
+        self.has_spatial = has_spatial
+        self.n_spatial = n_spatial
+        self.spatial_mode = spatial_mode
 
     @property
     def spike_count(self):
@@ -253,23 +279,57 @@ class SpikeStats:
 
     @property
     def spike_rate(self):
-        return 1000 * (self.spike_count / self.duration)
+        rate = 1000 * (self.spike_count / self.duration)
+
+        if self.has_spatial:
+            n_units = rate.shape[0] // self.n_spatial
+            rate = rate.reshape(n_units, self.n_spatial)
+
+            if self.spatial_mode == "nanmean":
+                rate = torch.nanmean(rate, dim=1)
+
+            elif self.spatial_mode == "max":
+                idx = torch.argmax(rate, dim=1)
+                rate = rate[torch.arange(n_units), idx]
+
+        return rate
 
     @property
     def cv(self):
         reshaped_spikes = self.spike_tensor[:, :, 0, :].permute(0, 2, 1)
         isi_tensor = spiking_phys.compute_isis_tensor(reshaped_spikes)
 
-        # Returns clips x neurons
         cvs = spiking_phys.compute_isi_cvs(isi_tensor, self.min_cv_spikes)
-        # -1 are invalid cv from min_cv_spikes filtering
-        return torch.Tensor([neuron_cvs[neuron_cvs != -1].mean() for neuron_cvs in cvs.permute(1, 0)])
+
+        cvs = torch.Tensor([
+            neuron_cvs[neuron_cvs != -1].mean()
+            if (neuron_cvs != -1).any()
+            else float("nan")
+            for neuron_cvs in cvs.permute(1, 0)
+        ])
+
+        if self.has_spatial:
+            n_units = cvs.shape[0] // self.n_spatial
+            cvs = cvs.reshape(n_units, self.n_spatial)
+
+            if self.spatial_mode == "nanmean":
+                cvs = torch.nanmean(cvs, dim=1)
+
+            elif self.spatial_mode == "max":
+                # IMPORTANT: choose spatial position based on firing rate
+                rate = 1000 * (self.spike_count / self.duration)
+                rate = rate.reshape(n_units, self.n_spatial)
+
+                idx = torch.argmax(rate, dim=1)
+                cvs = cvs[torch.arange(n_units), idx]
+
+        return cvs
 
     @property
     def synchronization(self):
         return self.get_synchronization(pairs=1000, seed=0, bin_dt=33)[1]
 
-    def get_synchronization(self, pairs=1000, seed=0, bin_dt=33, from_idxs=None, to_idxs=None):
+    def get_synchronization(self, pairs=1000, seed=0, bin_dt=33, from_idxs=None, to_idxs=None, apply_kernel_compensation=True):
         torch.manual_seed(seed)
         dt = 4
         reshaped_spikes = self.spike_tensor[:, :, 0, :].permute(0, 2, 1)
@@ -281,14 +341,30 @@ class SpikeStats:
         # brainbox >=0.0.9 normalizes the binning kernel in bin_spikes (kernel /= kernel.sum()),
         # which scales the unnormalized cross-covariance by 1/(bin_dt/dt)**2. Compensate to
         # reproduce the paper's published values, which were generated against the older binning.
-        kernel_length = bin_dt / dt
-        correlation = mean_synchronization["correlation"].values * (kernel_length ** 2)
+        correlation = mean_synchronization["correlation"].values
+        if apply_kernel_compensation:
+            kernel_length = bin_dt / dt
+            correlation = correlation * (kernel_length ** 2)
 
         return lag.values, correlation
 
     @property
     def fano(self):
         fano_factors = self.spike_variance / self.spike_count
+
+        if self.has_spatial:
+            n_units = fano_factors.shape[0] // self.n_spatial
+            fano_factors = fano_factors.reshape(n_units, self.n_spatial)
+
+            if self.spatial_mode == "nanmean":
+                fano_factors = torch.nanmean(fano_factors, dim=1)
+
+            elif self.spatial_mode == "max":
+                rate = 1000 * (self.spike_count / self.duration)
+                rate = rate.reshape(n_units, self.n_spatial)
+
+                idx = torch.argmax(rate, dim=1)
+                fano_factors = fano_factors[torch.arange(n_units), idx]
 
         return fano_factors
 
@@ -320,7 +396,7 @@ class UnitResponseCorrelation:
             for j in range(4):
                 from_idxs = self._get_unit_type_idxs(i)
                 to_idxs = self._get_unit_type_idxs(j)
-                cc = self.model_states.exp_stats.get_synchronization(pairs=1000, seed=0, bin_dt=33, from_idxs=from_idxs, to_idxs=to_idxs)
+                cc = self.model_states.exp_stats.get_synchronization(pairs=1000, seed=0, bin_dt=33, from_idxs=from_idxs, to_idxs=to_idxs, apply_kernel_compensation=False)
                 cc_matrix[i, j] = cc[1][int(len(cc[1])//2)]
         return cc_matrix
 
