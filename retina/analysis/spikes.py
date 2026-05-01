@@ -1,4 +1,5 @@
 import gc
+import os
 
 import torch
 import torch.nn.functional as F
@@ -144,7 +145,9 @@ class AllDatasetSpikeStats:
 
 class ModelDatasetSpikeStats:
 
-    def __init__(self, root, min_cv_spikes=3, pred_offset=128, repeats=5, img=True, dataset_path="/home/datasets/natural", ablate_recurrence=False, patchify=False):
+    def __init__(self, root, min_cv_spikes=3, pred_offset=128, repeats=5, img=True, dataset_path=None, ablate_recurrence=False, patchify=False):
+        if dataset_path is None:
+            dataset_path = os.path.join(root, "data", "natural")
         if img:
             dataset = loader.load(root, False, "SalamanderImage", 0.1171875, 30.0, 1.0, cell_idx=None)
             self.x = dataset._transformed_x.unsqueeze(1)

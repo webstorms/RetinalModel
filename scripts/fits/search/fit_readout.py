@@ -1,12 +1,12 @@
-import os
 import logging
+from pathlib import Path
 logging.getLogger("trainer").setLevel(logging.WARNING)
 
 from retina.neural import train
 import retina.neural.glm as glm
 import retina.neural.pca as pca
 
-root = os.path.expanduser("~/PycharmProjects/RetinalModel")
+root = str(Path(__file__).resolve().parents[3])
 
 
 def fit_readouts(n_epochs, batch_size, lambdas, dataset_name, spatial_args, luminance=1, rf_len_ms=21, clamp=False):

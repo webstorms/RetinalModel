@@ -1,7 +1,8 @@
 import os
+from pathlib import Path
 
-root = os.path.expanduser("~/PycharmProjects/RetinalModel")
-dataset_path = "/home/datasets/natural"
+root = str(Path(__file__).resolve().parents[2])
+dataset_path = os.path.join(root, "data", "natural")
 
 
 def train(lam, noise_type, photo_noise, ganglion_noise, pred_ms, decoder_span=16):
