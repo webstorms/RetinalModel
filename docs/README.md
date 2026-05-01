@@ -33,7 +33,9 @@ See the training script for a full list of command-line arguments.
 Instead of training the models from scratch, pre-trained models can be found under the releases of this repository.
 
 ### Natural movie training data
-We recorded various natural movies for model training. The dataset can be downloaded from: https://figshare.com/articles/dataset/Natural_movies/24265498. Make sure to set the ```dataset_path``` variable in the ```scripts/model/fits.py``` script to point to the dataset.
+We recorded various natural movies for model training. The dataset can be downloaded from: https://figshare.com/articles/dataset/Natural_movies/24265498. Place (or symlink) the dataset at ```data/natural/``` inside the repository — that is the default location the scripts and notebooks look for. If you need a different location, pass ```--dataset_path``` to ```scripts/model/train.py``` (or pass ```dataset_path=``` to the analysis classes that accept it).
+
+Note: the project root is auto-resolved from each script's location and from the notebook working directory, so the repository can be cloned anywhere — there is no need to edit a ```root``` variable.
 
 ## Reproducing paper results
 All the figures in the paper can be reproduced using the notebooks found in the ```notebooks``` directory.

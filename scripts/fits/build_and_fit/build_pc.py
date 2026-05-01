@@ -1,10 +1,10 @@
-import os
+from pathlib import Path
 
 from retina import train
 import retina.neural.pca as pca
 import retina.neural.dataset as neural_dataset
 
-root = os.path.expanduser("~/PycharmProjects/RetinalModel")
+root = str(Path(__file__).resolve().parents[3])
 
 
 def build_pcs(dataset_name, spatial_args, luminance=1):

@@ -1,8 +1,8 @@
-import os
+from pathlib import Path
 
 from retina import analysis
 
-root = os.path.expanduser("~/PycharmProjects/RetinalModel")
+root = str(Path(__file__).resolve().parents[2])
 
 
 def fit_model(noise, code):

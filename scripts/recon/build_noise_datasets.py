@@ -5,7 +5,7 @@ import torch
 
 from retina.analysis.latency import NoiseReconstructionDatasetBuilder
 
-root = os.path.expanduser("~/PycharmProjects/RetinalModel")
+root = str(Path(__file__).resolve().parents[2])
 pred_offset = 128
 length = 72
 

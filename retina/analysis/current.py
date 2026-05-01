@@ -1,3 +1,5 @@
+import os
+
 import torch
 import pandas as pd
 
@@ -7,7 +9,9 @@ import retina.dataset as retina_dataset
 
 class FeedforwardVsRecurrentContribution:
 
-    def __init__(self, root, model_name="0.0031622776601683794_*_0.01_0.6_128_8", dataset_path="/home/datasets/natural"):
+    def __init__(self, root, model_name="0.0031622776601683794_*_0.01_0.6_128_8", dataset_path=None):
+        if dataset_path is None:
+            dataset_path = os.path.join(root, "data", "natural")
         self.model = train.Trainer.load_model(f"{root}/results", model_name)
         dataset = retina_dataset.PatchNaturalDataset(root=dataset_path, train=False, temp_len=600, kernel=20, flip=True, n_frame_ext=2)
         self.clips = torch.stack([dataset[i][0] for i in range(10)])
